@@ -3,17 +3,17 @@ import { generateId } from '@/utils/formatters';
 
 const sizes = ['XS', 'S', 'M', 'L', 'XL'];
 
-const productData: Array<{name: string; sku: string; category: string; salePrice: number; costPrice: number; taxRate: number}> = [
-  { name: 'Basic Tişört', sku: 'TSR-001', category: 'Tişört', salePrice: 299, costPrice: 85, taxRate: 20 },
-  { name: 'Oversize Hoodie', sku: 'HOD-001', category: 'Sweatshirt', salePrice: 599, costPrice: 180, taxRate: 20 },
-  { name: 'Slim Fit Jean', sku: 'JEN-001', category: 'Pantolon', salePrice: 799, costPrice: 250, taxRate: 20 },
-  { name: 'Crop Top', sku: 'CRP-001', category: 'Tişört', salePrice: 249, costPrice: 65, taxRate: 20 },
-  { name: 'Kargo Pantolon', sku: 'KRG-001', category: 'Pantolon', salePrice: 699, costPrice: 210, taxRate: 20 },
-  { name: 'Bomber Ceket', sku: 'BMR-001', category: 'Dış Giyim', salePrice: 1299, costPrice: 420, taxRate: 20 },
-  { name: 'Triko Kazak', sku: 'TRK-001', category: 'Kazak', salePrice: 549, costPrice: 160, taxRate: 20 },
-  { name: 'Şort', sku: 'SRT-001', category: 'Pantolon', salePrice: 349, costPrice: 95, taxRate: 20 },
-  { name: 'Elbise', sku: 'ELB-001', category: 'Elbise', salePrice: 899, costPrice: 280, taxRate: 20 },
-  { name: 'Yelek', sku: 'YLK-001', category: 'Dış Giyim', salePrice: 499, costPrice: 140, taxRate: 20 },
+const productData: Array<{name: string; sku: string; category: string; salePrice: number; costPrice: number}> = [
+  { name: 'Basic Tişört', sku: 'TSR-001', category: 'Tişört', salePrice: 299, costPrice: 85 },
+  { name: 'Oversize Hoodie', sku: 'HOD-001', category: 'Sweatshirt', salePrice: 599, costPrice: 180 },
+  { name: 'Slim Fit Jean', sku: 'JEN-001', category: 'Pantolon', salePrice: 799, costPrice: 250 },
+  { name: 'Crop Top', sku: 'CRP-001', category: 'Tişört', salePrice: 249, costPrice: 65 },
+  { name: 'Kargo Pantolon', sku: 'KRG-001', category: 'Pantolon', salePrice: 699, costPrice: 210 },
+  { name: 'Bomber Ceket', sku: 'BMR-001', category: 'Dış Giyim', salePrice: 1299, costPrice: 420 },
+  { name: 'Triko Kazak', sku: 'TRK-001', category: 'Kazak', salePrice: 549, costPrice: 160 },
+  { name: 'Şort', sku: 'SRT-001', category: 'Pantolon', salePrice: 349, costPrice: 95 },
+  { name: 'Elbise', sku: 'ELB-001', category: 'Elbise', salePrice: 899, costPrice: 280 },
+  { name: 'Yelek', sku: 'YLK-001', category: 'Dış Giyim', salePrice: 499, costPrice: 140 },
 ];
 
 export const sampleProducts: Product[] = productData.map((p, i) => ({
@@ -83,7 +83,6 @@ function createSampleOrders(): Order[] {
         quantity: qty,
         unitSalePrice: variant.salePriceOverride ?? product.salePrice,
         unitCostPrice: variant.costPriceOverride ?? product.costPrice,
-        taxRate: product.taxRate,
         isGift,
       });
     }
@@ -95,11 +94,13 @@ function createSampleOrders(): Order[] {
       id: `order-${i + 1}`,
       orderNumber: `SP-25${(orderDate.getMonth() + 1).toString().padStart(2, '0')}${orderDate.getDate().toString().padStart(2, '0')}-${(1000 + i).toString()}`,
       items,
-      shippingRevenue: Math.random() > 0.5 ? 49.90 : 0,
+      taxRate: 20,
       shippingCost: 25 + Math.floor(Math.random() * 20),
       packagingCost: 5 + Math.floor(Math.random() * 10),
-      commissionRate: 3.5,
-      commissionFixed: 1.5,
+      paymentCommissionRate: 2.49,
+      paymentCommissionFixed: 0.25,
+      shopifyCommissionRate: 2.0,
+      shopifyCommissionFixed: 0,
       discountAmount: Math.random() > 0.7 ? Math.floor(Math.random() * 50) + 10 : 0,
       discountRate: Math.random() > 0.8 ? 5 + Math.floor(Math.random() * 10) : 0,
       extraExpense: 0,

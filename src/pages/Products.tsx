@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Product, ProductVariant } from "@/types";
-import { formatCurrency } from "@/utils/formatters";
+import { formatCurrency, generateId } from "@/utils/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,13 +10,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronRight, Package } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronRight, Package, X } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-const defaultSizes = ['XS', 'S', 'M', 'L', 'XL'];
+interface VariantDraft {
+  tempId: string;
+  name: string;
+  sku: string;
+  stock: number;
+  lowStockThreshold: number;
+  costPriceOverride: string;
+  salePriceOverride: string;
+}
 
 export default function Products() {
-  const { products, variants, settings, addProduct, updateProduct, deleteProduct, addVariant, updateVariant, deleteVariant, getVariantsForProduct } = useApp();
+  const { products, variants, settings, addProduct, updateProduct, deleteProduct, deleteProducts, addVariant, updateVariant, deleteVariant, getVariantsForProduct } = useApp();
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -25,11 +38,14 @@ export default function Products() {
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
   const [editVariant, setEditVariant] = useState<ProductVariant | null>(null);
   const [variantProductId, setVariantProductId] = useState<string>("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const sym = settings.currencySymbol;
 
   const [form, setForm] = useState({
-    name: '', sku: '', category: '', salePrice: 0, costPrice: 0, taxRate: settings.defaultTaxRate, notes: '', active: true,
+    name: '', sku: '', category: '', salePrice: 0, costPrice: 0, notes: '', active: true,
   });
+  const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [vForm, setVForm] = useState({
     name: '', sku: '', stock: 0, lowStockThreshold: 5, costPriceOverride: '' as string, salePriceOverride: '' as string,
   });
@@ -40,15 +56,74 @@ export default function Products() {
     return true;
   });
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(p => p.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    deleteProducts(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setBulkDeleteOpen(false);
+    toast.success(`${selectedIds.size} ürün silindi`);
+  };
+
+  const addVariantDraft = () => {
+    setVariantDrafts([...variantDrafts, {
+      tempId: generateId(),
+      name: '',
+      sku: form.sku ? `${form.sku}-` : '',
+      stock: 0,
+      lowStockThreshold: 5,
+      costPriceOverride: '',
+      salePriceOverride: '',
+    }]);
+  };
+
+  const addDefaultSizeVariants = () => {
+    const sizes = ['XS', 'S', 'M', 'L', 'XL'];
+    const newDrafts = sizes.map(size => ({
+      tempId: generateId(),
+      name: size,
+      sku: form.sku ? `${form.sku}-${size}` : size,
+      stock: 0,
+      lowStockThreshold: 5,
+      costPriceOverride: '',
+      salePriceOverride: '',
+    }));
+    setVariantDrafts([...variantDrafts, ...newDrafts]);
+  };
+
+  const updateVariantDraft = (tempId: string, updates: Partial<VariantDraft>) => {
+    setVariantDrafts(variantDrafts.map(v => v.tempId === tempId ? { ...v, ...updates } : v));
+  };
+
+  const removeVariantDraft = (tempId: string) => {
+    setVariantDrafts(variantDrafts.filter(v => v.tempId !== tempId));
+  };
+
   const openAdd = () => {
     setEditProduct(null);
-    setForm({ name: '', sku: '', category: settings.categories[0] || '', salePrice: 0, costPrice: 0, taxRate: settings.defaultTaxRate, notes: '', active: true });
+    setForm({ name: '', sku: '', category: settings.categories[0] || '', salePrice: 0, costPrice: 0, notes: '', active: true });
+    setVariantDrafts([]);
     setDialogOpen(true);
   };
 
   const openEdit = (p: Product) => {
     setEditProduct(p);
-    setForm({ name: p.name, sku: p.sku, category: p.category, salePrice: p.salePrice, costPrice: p.costPrice, taxRate: p.taxRate, notes: p.notes, active: p.active });
+    setForm({ name: p.name, sku: p.sku, category: p.category, salePrice: p.salePrice, costPrice: p.costPrice, notes: p.notes, active: p.active });
+    setVariantDrafts([]);
     setDialogOpen(true);
   };
 
@@ -58,11 +133,15 @@ export default function Products() {
       updateProduct({ ...editProduct, ...form });
       toast.success("Ürün güncellendi");
     } else {
-      const newP = addProduct(form);
-      // Create default size variants
-      defaultSizes.forEach(size => {
-        addVariant({ productId: newP.id, name: size, sku: `${form.sku}-${size}`, stock: 0, lowStockThreshold: 5, costPriceOverride: null, salePriceOverride: null });
-      });
+      const newVariants = variantDrafts.map(v => ({
+        name: v.name,
+        sku: v.sku,
+        stock: v.stock,
+        lowStockThreshold: v.lowStockThreshold,
+        costPriceOverride: v.costPriceOverride ? Number(v.costPriceOverride) : null,
+        salePriceOverride: v.salePriceOverride ? Number(v.salePriceOverride) : null,
+      }));
+      addProduct(form, newVariants);
       toast.success("Ürün eklendi");
     }
     setDialogOpen(false);
@@ -121,6 +200,17 @@ export default function Products() {
         <Button onClick={openAdd}><Plus className="h-4 w-4 mr-1" /> Yeni Ürün</Button>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2.5">
+          <span className="text-sm font-medium">{selectedIds.size} ürün seçildi</span>
+          <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Seçilenleri Sil
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>İptal</Button>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -136,6 +226,17 @@ export default function Products() {
       </div>
 
       <div className="space-y-3">
+        {/* Select all */}
+        {filtered.length > 0 && (
+          <div className="flex items-center gap-2 px-4">
+            <Checkbox
+              checked={selectedIds.size === filtered.length && filtered.length > 0}
+              onCheckedChange={toggleSelectAll}
+            />
+            <span className="text-xs text-muted-foreground">Tümünü seç</span>
+          </div>
+        )}
+
         {filtered.map(p => {
           const pVariants = getVariantsForProduct(p.id);
           const totalStock = pVariants.reduce((s, v) => s + v.stock, 0);
@@ -143,35 +244,42 @@ export default function Products() {
 
           return (
             <Card key={p.id} className="overflow-hidden">
-              <div className="flex items-center p-4 gap-4 cursor-pointer" onClick={() => setExpandedId(expanded ? null : p.id)}>
-                <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
-                  <Package className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-sm">{p.name}</h3>
-                    {!p.active && <Badge variant="secondary" className="text-[10px]">Pasif</Badge>}
+              <div className="flex items-center p-4 gap-4">
+                <Checkbox
+                  checked={selectedIds.has(p.id)}
+                  onCheckedChange={() => toggleSelect(p.id)}
+                  onClick={e => e.stopPropagation()}
+                />
+                <div className="flex items-center flex-1 gap-4 cursor-pointer" onClick={() => setExpandedId(expanded ? null : p.id)}>
+                  <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                    <Package className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <p className="text-xs text-muted-foreground">{p.sku} · {p.category}</p>
-                </div>
-                <div className="hidden sm:flex items-center gap-6 text-sm">
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Satış</p>
-                    <p className="font-medium">{formatCurrency(p.salePrice, sym)}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-sm">{p.name}</h3>
+                      {!p.active && <Badge variant="secondary" className="text-[10px]">Pasif</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{p.sku} · {p.category}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Maliyet</p>
-                    <p className="font-medium">{formatCurrency(p.costPrice, sym)}</p>
+                  <div className="hidden sm:flex items-center gap-6 text-sm">
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Satış</p>
+                      <p className="font-medium">{formatCurrency(p.salePrice, sym)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Maliyet</p>
+                      <p className="font-medium">{formatCurrency(p.costPrice, sym)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Stok</p>
+                      <p className="font-medium">{totalStock}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Stok</p>
-                    <p className="font-medium">{totalStock}</p>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); openEdit(p); }}><Edit2 className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={e => { e.stopPropagation(); handleDelete(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                   </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); openEdit(p); }}><Edit2 className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={e => { e.stopPropagation(); handleDelete(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                  {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 </div>
               </div>
 
@@ -211,7 +319,7 @@ export default function Products() {
 
       {/* Product Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editProduct ? 'Ürün Düzenle' : 'Yeni Ürün'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2"><Label>Ürün Adı</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
@@ -225,10 +333,50 @@ export default function Products() {
             </div>
             <div><Label>Satış Fiyatı ({sym})</Label><Input type="number" value={form.salePrice} onChange={e => setForm({ ...form, salePrice: Number(e.target.value) })} /></div>
             <div><Label>Maliyet ({sym})</Label><Input type="number" value={form.costPrice} onChange={e => setForm({ ...form, costPrice: Number(e.target.value) })} /></div>
-            <div><Label>KDV Oranı (%)</Label><Input type="number" value={form.taxRate} onChange={e => setForm({ ...form, taxRate: Number(e.target.value) })} /></div>
             <div className="flex items-center gap-2 pt-5"><Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} /><Label>Aktif</Label></div>
             <div className="col-span-2"><Label>Notlar</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
+
+          {/* Inline Variant Creation (only for new products) */}
+          {!editProduct && (
+            <div className="mt-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Varyantlar</h4>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={addDefaultSizeVariants}>
+                    Beden Ekle (XS-XL)
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={addVariantDraft}>
+                    <Plus className="h-3 w-3 mr-1" /> Varyant Ekle
+                  </Button>
+                </div>
+              </div>
+              {variantDrafts.length === 0 && (
+                <p className="text-xs text-muted-foreground border border-dashed border-border rounded-lg p-4 text-center">
+                  Henüz varyant eklenmedi. Beden veya özel varyant ekleyin.
+                </p>
+              )}
+              {variantDrafts.map(draft => (
+                <div key={draft.tempId} className="border border-border rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">{draft.name || 'Yeni Varyant'}</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeVariantDraft(draft.tempId)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><Label className="text-xs">Beden / Ad</Label><Input value={draft.name} onChange={e => updateVariantDraft(draft.tempId, { name: e.target.value })} className="text-xs" /></div>
+                    <div><Label className="text-xs">SKU</Label><Input value={draft.sku} onChange={e => updateVariantDraft(draft.tempId, { sku: e.target.value })} className="text-xs" /></div>
+                    <div><Label className="text-xs">Stok</Label><Input type="number" value={draft.stock} onChange={e => updateVariantDraft(draft.tempId, { stock: Number(e.target.value) })} className="text-xs" /></div>
+                    <div><Label className="text-xs">Düşük Stok Eşiği</Label><Input type="number" value={draft.lowStockThreshold} onChange={e => updateVariantDraft(draft.tempId, { lowStockThreshold: Number(e.target.value) })} className="text-xs" /></div>
+                    <div><Label className="text-xs">Maliyet Fark ({sym})</Label><Input type="number" placeholder="Opsiyonel" value={draft.costPriceOverride} onChange={e => updateVariantDraft(draft.tempId, { costPriceOverride: e.target.value })} className="text-xs" /></div>
+                    <div><Label className="text-xs">Satış Fark ({sym})</Label><Input type="number" placeholder="Opsiyonel" value={draft.salePriceOverride} onChange={e => updateVariantDraft(draft.tempId, { salePriceOverride: e.target.value })} className="text-xs" /></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <DialogFooter><Button onClick={saveProduct}>{editProduct ? 'Güncelle' : 'Kaydet'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
@@ -248,6 +396,22 @@ export default function Products() {
           <DialogFooter><Button onClick={saveVariant}>{editVariant ? 'Güncelle' : 'Kaydet'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Delete Confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Toplu Silme Onayı</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedIds.size} ürünü ve tüm varyantlarını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Sil</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

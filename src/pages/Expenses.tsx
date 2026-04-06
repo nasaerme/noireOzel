@@ -2,25 +2,31 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Expense } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Search, Edit2, Trash2, Receipt } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const freqLabels: Record<string, string> = { gunluk: 'Günlük', haftalik: 'Haftalık', aylik: 'Aylık', yillik: 'Yıllık' };
 
 export default function Expenses() {
-  const { expenses, settings, addExpense, updateExpense, deleteExpense } = useApp();
+  const { expenses, settings, addExpense, updateExpense, deleteExpense, deleteExpenses } = useApp();
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const sym = settings.currencySymbol;
 
   const [form, setForm] = useState({
@@ -41,6 +47,20 @@ export default function Expenses() {
 
   const totalExpenses = filtered.reduce((s, e) => s + e.amount, 0);
   const getCat = (id: string) => settings.expenseCategories.find(c => c.id === id);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(e => e.id)));
+  };
+  const handleBulkDelete = () => {
+    deleteExpenses(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setBulkDeleteOpen(false);
+    toast.success(`${selectedIds.size} gider silindi`);
+  };
 
   const openAdd = () => {
     setEditExpense(null);
@@ -77,6 +97,16 @@ export default function Expenses() {
         <Button onClick={openAdd}><Plus className="h-4 w-4 mr-1" /> Yeni Gider</Button>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2.5">
+          <span className="text-sm font-medium">{selectedIds.size} gider seçildi</span>
+          <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Seçilenleri Sil
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>İptal</Button>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -96,6 +126,7 @@ export default function Expenses() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/50">
+                <th className="p-3 w-10"><Checkbox checked={selectedIds.size === filtered.length && filtered.length > 0} onCheckedChange={toggleSelectAll} /></th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Tarih</th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Kategori</th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Açıklama</th>
@@ -109,6 +140,7 @@ export default function Expenses() {
                 const cat = getCat(e.categoryId);
                 return (
                   <tr key={e.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+                    <td className="p-3"><Checkbox checked={selectedIds.has(e.id)} onCheckedChange={() => toggleSelect(e.id)} /></td>
                     <td className="p-3 text-muted-foreground">{formatDate(e.date)}</td>
                     <td className="p-3">
                       <Badge variant="secondary" className="text-[10px]" style={{ backgroundColor: cat?.color + '20', color: cat?.color }}>
@@ -169,6 +201,21 @@ export default function Expenses() {
           <DialogFooter><Button onClick={save}>{editExpense ? 'Güncelle' : 'Kaydet'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Toplu Silme Onayı</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedIds.size} gideri silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Sil</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

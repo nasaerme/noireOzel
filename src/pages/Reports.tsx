@@ -57,27 +57,29 @@ export default function Reports() {
 
     let totalOrders = filteredOrders.length;
     let unitsSold = 0;
-    let grossRevenue = 0, netRevenueExTax = 0, totalProductCost = 0;
-    let shippingCost = 0, packagingCost = 0, commissionCost = 0, giftCost = 0, totalDiscounts = 0, totalTax = 0;
+    let subtotal = 0, totalTax = 0, totalProductCost = 0;
+    let shippingCost = 0, packagingCost = 0, paymentCommission = 0, shopifyCommission = 0, totalCommission = 0;
+    let giftCost = 0, totalDiscounts = 0;
 
     filteredOrders.forEach(o => {
       const calc = calculateOrder(o);
       unitsSold += o.items.reduce((s, i) => s + i.quantity, 0);
-      grossRevenue += calc.grossRevenue;
-      netRevenueExTax += calc.netRevenueExTax;
+      subtotal += calc.taxableAmount;
+      totalTax += calc.totalTax;
       totalProductCost += calc.totalProductCost;
       shippingCost += calc.shippingCost;
       packagingCost += calc.packagingCost;
-      commissionCost += calc.commissionCost;
+      paymentCommission += calc.paymentCommissionCost;
+      shopifyCommission += calc.shopifyCommissionCost;
+      totalCommission += calc.totalCommissionCost;
       giftCost += calc.giftCost;
       totalDiscounts += calc.totalDiscount;
-      totalTax += calc.totalTax;
     });
 
     const totalBusinessExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-    const grossProfit = grossRevenue - totalDiscounts - totalProductCost - giftCost;
-    const netProfit = netRevenueExTax - totalProductCost - giftCost - shippingCost - packagingCost - commissionCost - totalBusinessExpenses;
-    const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
+    const grossProfit = subtotal - totalProductCost - giftCost;
+    const netProfit = subtotal - totalTax - totalProductCost - giftCost - shippingCost - packagingCost - totalCommission - totalBusinessExpenses;
+    const profitMargin = subtotal > 0 ? (netProfit / subtotal) * 100 : 0;
 
     // Product sales
     const productSales: Record<string, number> = {};
@@ -113,15 +115,16 @@ export default function Reports() {
       const key = o.orderDate.split('T')[0];
       if (!revenueOverTime[key]) revenueOverTime[key] = { date: key, gelir: 0, kar: 0, siparis: 0 };
       const calc = calculateOrder(o);
-      revenueOverTime[key].gelir += calc.netRevenueAfterDiscount;
+      revenueOverTime[key].gelir += calc.taxableAmount;
       revenueOverTime[key].kar += calc.netProfit;
       revenueOverTime[key].siparis += 1;
     });
     const timeData = Object.values(revenueOverTime).sort((a, b) => a.date.localeCompare(b.date));
 
     return {
-      totalOrders, unitsSold, grossRevenue, netRevenueExTax, totalProductCost,
-      shippingCost, packagingCost, commissionCost, giftCost, totalDiscounts, totalTax,
+      totalOrders, unitsSold, subtotal, totalTax, totalProductCost,
+      shippingCost, packagingCost, paymentCommission, shopifyCommission, totalCommission,
+      giftCost, totalDiscounts,
       totalBusinessExpenses, grossProfit, netProfit, profitMargin,
       topProducts, topVariants, expBreakdown, timeData,
     };
@@ -161,18 +164,20 @@ export default function Reports() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <KPI label="Sipariş" value={metrics.totalOrders.toString()} />
         <KPI label="Satılan Adet" value={metrics.unitsSold.toString()} />
-        <KPI label="Brüt Gelir" value={formatCurrency(metrics.grossRevenue, sym)} />
+        <KPI label="Net Gelir" value={formatCurrency(metrics.subtotal, sym)} />
         <KPI label="Net Kâr" value={formatCurrency(metrics.netProfit, sym)} accent />
         <KPI label="Kâr Marjı" value={`%${metrics.profitMargin.toFixed(1)}`} />
       </div>
 
       {/* Detail breakdown */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KPI label="Vergisiz Gelir" value={formatCurrency(metrics.netRevenueExTax, sym)} small />
+        <KPI label="KDV" value={formatCurrency(metrics.totalTax, sym)} small />
         <KPI label="Ürün Maliyeti" value={formatCurrency(metrics.totalProductCost, sym)} small />
         <KPI label="Kargo" value={formatCurrency(metrics.shippingCost, sym)} small />
         <KPI label="Ambalaj" value={formatCurrency(metrics.packagingCost, sym)} small />
-        <KPI label="Komisyon" value={formatCurrency(metrics.commissionCost, sym)} small />
+        <KPI label="Ödeme Komisyonu" value={formatCurrency(metrics.paymentCommission, sym)} small />
+        <KPI label="Shopify Komisyonu" value={formatCurrency(metrics.shopifyCommission, sym)} small />
+        <KPI label="Toplam Komisyon" value={formatCurrency(metrics.totalCommission, sym)} small />
         <KPI label="Hediye" value={formatCurrency(metrics.giftCost, sym)} small />
         <KPI label="İndirimler" value={formatCurrency(metrics.totalDiscounts, sym)} small />
         <KPI label="İşletme Gideri" value={formatCurrency(metrics.totalBusinessExpenses, sym)} small />

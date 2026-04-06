@@ -9,18 +9,21 @@ interface AppContextType {
   orders: Order[];
   expenses: Expense[];
   settings: Settings;
-  addProduct: (p: Omit<Product, 'id' | 'createdAt'>) => Product;
+  addProduct: (p: Omit<Product, 'id' | 'createdAt'>, newVariants?: Omit<ProductVariant, 'id' | 'productId'>[]) => Product;
   updateProduct: (p: Product) => void;
   deleteProduct: (id: string) => void;
+  deleteProducts: (ids: string[]) => void;
   addVariant: (v: Omit<ProductVariant, 'id'>) => ProductVariant;
   updateVariant: (v: ProductVariant) => void;
   deleteVariant: (id: string) => void;
   addOrder: (o: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Order;
   updateOrder: (o: Order) => void;
   deleteOrder: (id: string) => void;
+  deleteOrders: (ids: string[]) => void;
   addExpense: (e: Omit<Expense, 'id' | 'createdAt'>) => void;
   updateExpense: (e: Expense) => void;
   deleteExpense: (id: string) => void;
+  deleteExpenses: (ids: string[]) => void;
   updateSettings: (s: Partial<Settings>) => void;
   getProduct: (id: string) => Product | undefined;
   getVariant: (id: string) => ProductVariant | undefined;
@@ -57,9 +60,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const persist = useCallback((key: string, data: unknown) => saveState(key, data), []);
 
-  const addProduct = useCallback((p: Omit<Product, 'id' | 'createdAt'>) => {
+  const addProduct = useCallback((p: Omit<Product, 'id' | 'createdAt'>, newVariants?: Omit<ProductVariant, 'id' | 'productId'>[]) => {
     const newP: Product = { ...p, id: generateId(), createdAt: new Date().toISOString() };
     setProducts(prev => { const next = [...prev, newP]; persist('app_products', next); return next; });
+    if (newVariants && newVariants.length > 0) {
+      const createdVariants = newVariants.map(v => ({ ...v, id: generateId(), productId: newP.id }));
+      setVariants(prev => { const next = [...prev, ...createdVariants]; persist('app_variants', next); return next; });
+    }
     return newP;
   }, [persist]);
 
@@ -70,6 +77,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteProduct = useCallback((id: string) => {
     setProducts(prev => { const next = prev.filter(x => x.id !== id); persist('app_products', next); return next; });
     setVariants(prev => { const next = prev.filter(x => x.productId !== id); persist('app_variants', next); return next; });
+  }, [persist]);
+
+  const deleteProducts = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setProducts(prev => { const next = prev.filter(x => !idSet.has(x.id)); persist('app_products', next); return next; });
+    setVariants(prev => { const next = prev.filter(x => !idSet.has(x.productId)); persist('app_variants', next); return next; });
   }, [persist]);
 
   const addVariant = useCallback((v: Omit<ProductVariant, 'id'>) => {
@@ -88,7 +101,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addOrder = useCallback((o: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => {
     const newO: Order = { ...o, id: generateId(), orderNumber: generateOrderNumber(), createdAt: new Date().toISOString() };
-    // Decrease stock
     setVariants(prev => {
       const next = prev.map(v => {
         const item = newO.items.find(i => i.variantId === v.id);
@@ -105,7 +117,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateOrder = useCallback((o: Order) => {
     setOrders(prev => {
       const oldOrder = prev.find(x => x.id === o.id);
-      // Restore old stock, apply new
       if (oldOrder) {
         setVariants(vPrev => {
           let next = [...vPrev];
@@ -144,6 +155,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [persist]);
 
+  const deleteOrders = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setOrders(prev => {
+      const toDelete = prev.filter(x => idSet.has(x.id));
+      // Restore stock for all deleted orders
+      setVariants(vPrev => {
+        let next = [...vPrev];
+        toDelete.forEach(order => {
+          order.items.forEach(item => {
+            next = next.map(v => v.id === item.variantId ? { ...v, stock: v.stock + item.quantity } : v);
+          });
+        });
+        persist('app_variants', next);
+        return next;
+      });
+      const next = prev.filter(x => !idSet.has(x.id));
+      persist('app_orders', next);
+      return next;
+    });
+  }, [persist]);
+
   const addExpense = useCallback((e: Omit<Expense, 'id' | 'createdAt'>) => {
     const newE: Expense = { ...e, id: generateId(), createdAt: new Date().toISOString() };
     setExpenses(prev => { const next = [newE, ...prev]; persist('app_expenses', next); return next; });
@@ -157,6 +189,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setExpenses(prev => { const next = prev.filter(x => x.id !== id); persist('app_expenses', next); return next; });
   }, [persist]);
 
+  const deleteExpenses = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setExpenses(prev => { const next = prev.filter(x => !idSet.has(x.id)); persist('app_expenses', next); return next; });
+  }, [persist]);
+
   const updateSettings = useCallback((s: Partial<Settings>) => {
     setSettings(prev => { const next = { ...prev, ...s }; persist('app_settings', next); return next; });
   }, [persist]);
@@ -168,10 +205,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       products, variants, orders, expenses, settings,
-      addProduct, updateProduct, deleteProduct,
+      addProduct, updateProduct, deleteProduct, deleteProducts,
       addVariant, updateVariant, deleteVariant,
-      addOrder, updateOrder, deleteOrder,
-      addExpense, updateExpense, deleteExpense,
+      addOrder, updateOrder, deleteOrder, deleteOrders,
+      addExpense, updateExpense, deleteExpense, deleteExpenses,
       updateSettings, getProduct, getVariant, getVariantsForProduct,
     }}>
       {children}

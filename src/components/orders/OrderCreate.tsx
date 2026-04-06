@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Gift } from "lucide-react";
 import { toast } from "sonner";
@@ -17,11 +16,13 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
   const sym = settings.currencySymbol;
 
   const [items, setItems] = useState<OrderItem[]>([]);
-  const [shippingRevenue, setShippingRevenue] = useState(0);
+  const [taxRate, setTaxRate] = useState(settings.defaultTaxRate);
   const [shippingCost, setShippingCost] = useState(25);
   const [packagingCost, setPackagingCost] = useState(5);
-  const [commissionRate, setCommissionRate] = useState(3.5);
-  const [commissionFixed, setCommissionFixed] = useState(1.5);
+  const [paymentCommissionRate, setPaymentCommissionRate] = useState(2.49);
+  const [paymentCommissionFixed, setPaymentCommissionFixed] = useState(0.25);
+  const [shopifyCommissionRate, setShopifyCommissionRate] = useState(2.0);
+  const [shopifyCommissionFixed, setShopifyCommissionFixed] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountRate, setDiscountRate] = useState(0);
   const [extraExpense, setExtraExpense] = useState(0);
@@ -38,7 +39,6 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
       quantity: 1,
       unitSalePrice: 0,
       unitCostPrice: 0,
-      taxRate: settings.defaultTaxRate,
       isGift,
     }]);
   };
@@ -47,13 +47,11 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
     const newItems = [...items];
     newItems[idx] = { ...newItems[idx], ...updates };
 
-    // Auto-fill prices when product/variant selected
     if (updates.productId) {
       const p = products.find(x => x.id === updates.productId);
       if (p) {
         newItems[idx].unitSalePrice = p.salePrice;
         newItems[idx].unitCostPrice = p.costPrice;
-        newItems[idx].taxRate = p.taxRate;
         newItems[idx].variantId = '';
       }
     }
@@ -74,10 +72,12 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
 
   const orderForCalc = useMemo(() => ({
     id: '', orderNumber: '', createdAt: '',
-    items, shippingRevenue, shippingCost, packagingCost,
-    commissionRate, commissionFixed, discountAmount, discountRate,
+    items, taxRate, shippingCost, packagingCost,
+    paymentCommissionRate, paymentCommissionFixed,
+    shopifyCommissionRate, shopifyCommissionFixed,
+    discountAmount, discountRate,
     extraExpense, notes, orderDate, paymentStatus, orderStatus,
-  }), [items, shippingRevenue, shippingCost, packagingCost, commissionRate, commissionFixed, discountAmount, discountRate, extraExpense, notes, orderDate, paymentStatus, orderStatus]);
+  }), [items, taxRate, shippingCost, packagingCost, paymentCommissionRate, paymentCommissionFixed, shopifyCommissionRate, shopifyCommissionFixed, discountAmount, discountRate, extraExpense, notes, orderDate, paymentStatus, orderStatus]);
 
   const calc = calculateOrder(orderForCalc);
 
@@ -85,7 +85,6 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
     if (items.length === 0) { toast.error("En az bir ürün ekleyin"); return; }
     if (items.some(i => !i.productId || !i.variantId)) { toast.error("Tüm ürün ve varyantları seçin"); return; }
 
-    // Check stock
     const stockWarnings: string[] = [];
     items.forEach(item => {
       const v = variants.find(x => x.id === item.variantId);
@@ -100,8 +99,10 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
     }
 
     addOrder({
-      items, shippingRevenue, shippingCost, packagingCost,
-      commissionRate, commissionFixed, discountAmount, discountRate,
+      items, taxRate, shippingCost, packagingCost,
+      paymentCommissionRate, paymentCommissionFixed,
+      shopifyCommissionRate, shopifyCommissionFixed,
+      discountAmount, discountRate,
       extraExpense, notes, orderDate: new Date(orderDate).toISOString(),
       paymentStatus, orderStatus,
     });
@@ -148,7 +149,6 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
                 <div className="flex gap-4 text-[11px] text-muted-foreground">
                   <span>Satış: {formatCurrency(item.unitSalePrice, sym)}</span>
                   <span>Maliyet: {formatCurrency(item.unitCostPrice, sym)}</span>
-                  <span>KDV: %{item.taxRate}</span>
                 </div>
               </div>
             );
@@ -187,18 +187,36 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
+        {/* Tax & Discounts */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div><Label className="text-xs">Kargo Geliri ({sym})</Label><Input type="number" value={shippingRevenue} onChange={e => setShippingRevenue(Number(e.target.value))} className="text-xs" /></div>
+          <div><Label className="text-xs">KDV Oranı (%)</Label><Input type="number" value={taxRate} onChange={e => setTaxRate(Number(e.target.value))} className="text-xs" /></div>
+          <div><Label className="text-xs">İndirim Tutarı ({sym})</Label><Input type="number" value={discountAmount} onChange={e => setDiscountAmount(Number(e.target.value))} className="text-xs" /></div>
+          <div><Label className="text-xs">İndirim Oranı (%)</Label><Input type="number" value={discountRate} onChange={e => setDiscountRate(Number(e.target.value))} className="text-xs" /></div>
+        </div>
+
+        {/* Costs */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div><Label className="text-xs">Kargo Maliyeti ({sym})</Label><Input type="number" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))} className="text-xs" /></div>
           <div><Label className="text-xs">Ambalaj ({sym})</Label><Input type="number" value={packagingCost} onChange={e => setPackagingCost(Number(e.target.value))} className="text-xs" /></div>
-          <div><Label className="text-xs">Komisyon (%)</Label><Input type="number" value={commissionRate} onChange={e => setCommissionRate(Number(e.target.value))} className="text-xs" /></div>
-          <div><Label className="text-xs">Komisyon Sabit ({sym})</Label><Input type="number" value={commissionFixed} onChange={e => setCommissionFixed(Number(e.target.value))} className="text-xs" /></div>
           <div><Label className="text-xs">Ek Gider ({sym})</Label><Input type="number" value={extraExpense} onChange={e => setExtraExpense(Number(e.target.value))} className="text-xs" /></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div><Label className="text-xs">İndirim Tutarı ({sym})</Label><Input type="number" value={discountAmount} onChange={e => setDiscountAmount(Number(e.target.value))} className="text-xs" /></div>
-          <div><Label className="text-xs">İndirim Oranı (%)</Label><Input type="number" value={discountRate} onChange={e => setDiscountRate(Number(e.target.value))} className="text-xs" /></div>
+        {/* Payment Commission */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Ödeme Sağlayıcı Komisyonu</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-xs">Oran (%)</Label><Input type="number" value={paymentCommissionRate} onChange={e => setPaymentCommissionRate(Number(e.target.value))} className="text-xs" /></div>
+            <div><Label className="text-xs">Sabit Ücret ({sym})</Label><Input type="number" value={paymentCommissionFixed} onChange={e => setPaymentCommissionFixed(Number(e.target.value))} className="text-xs" /></div>
+          </div>
+        </div>
+
+        {/* Shopify Commission */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Shopify Komisyonu</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-xs">Oran (%)</Label><Input type="number" value={shopifyCommissionRate} onChange={e => setShopifyCommissionRate(Number(e.target.value))} className="text-xs" /></div>
+            <div><Label className="text-xs">Sabit Ücret ({sym})</Label><Input type="number" value={shopifyCommissionFixed} onChange={e => setShopifyCommissionFixed(Number(e.target.value))} className="text-xs" /></div>
+          </div>
         </div>
 
         <div><Label className="text-xs">Notlar</Label><Input value={notes} onChange={e => setNotes(e.target.value)} className="text-xs" /></div>
@@ -206,22 +224,24 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
 
       {/* Right: Summary */}
       <div className="lg:col-span-2">
-        <div className="sticky top-4 bg-secondary/50 rounded-xl border border-border p-4 space-y-3 text-sm">
-          <h3 className="font-semibold">Sipariş Özeti</h3>
-          <SummaryRow label="Brüt Gelir" value={formatCurrency(calc.grossRevenue, sym)} />
+        <div className="sticky top-4 bg-secondary/50 rounded-xl border border-border p-4 space-y-2.5 text-sm">
+          <h3 className="font-semibold mb-3">Sipariş Özeti</h3>
+          <SummaryRow label="Ara Toplam" value={formatCurrency(calc.subtotal, sym)} />
           {calc.totalDiscount > 0 && <SummaryRow label="İndirim" value={`-${formatCurrency(calc.totalDiscount, sym)}`} warn />}
-          <SummaryRow label="Net Gelir" value={formatCurrency(calc.netRevenueAfterDiscount, sym)} bold />
-          <div className="border-t border-border" />
-          <SummaryRow label="KDV" value={formatCurrency(calc.totalTax, sym)} />
-          <SummaryRow label="Vergisiz Gelir" value={formatCurrency(calc.netRevenueExTax, sym)} />
+          <SummaryRow label="Vergilenebilir Tutar" value={formatCurrency(calc.taxableAmount, sym)} bold />
+          <SummaryRow label={`KDV (%${taxRate})`} value={formatCurrency(calc.totalTax, sym)} />
           <div className="border-t border-border" />
           <SummaryRow label="Ürün Maliyeti" value={formatCurrency(calc.totalProductCost, sym)} />
           {calc.giftCost > 0 && <SummaryRow label="Hediye Maliyeti" value={formatCurrency(calc.giftCost, sym)} />}
           <SummaryRow label="Kargo" value={formatCurrency(calc.shippingCost, sym)} />
           <SummaryRow label="Ambalaj" value={formatCurrency(calc.packagingCost, sym)} />
-          <SummaryRow label="Komisyon" value={formatCurrency(calc.commissionCost, sym)} />
+          <div className="border-t border-border" />
+          <SummaryRow label="Ödeme Komisyonu" value={formatCurrency(calc.paymentCommissionCost, sym)} />
+          <SummaryRow label="Shopify Komisyonu" value={formatCurrency(calc.shopifyCommissionCost, sym)} />
+          <SummaryRow label="Toplam Komisyon" value={formatCurrency(calc.totalCommissionCost, sym)} bold />
           {calc.extraExpense > 0 && <SummaryRow label="Ek Gider" value={formatCurrency(calc.extraExpense, sym)} />}
           <div className="border-t border-border" />
+          <SummaryRow label="Toplam Maliyet" value={formatCurrency(calc.totalCost, sym)} />
           <SummaryRow label="Brüt Kâr" value={formatCurrency(calc.grossProfit, sym)} bold />
           <SummaryRow label="Net Kâr" value={formatCurrency(calc.netProfit, sym)} bold accent />
           <SummaryRow label="Kâr Marjı" value={`%${calc.profitMargin.toFixed(1)}`} />
