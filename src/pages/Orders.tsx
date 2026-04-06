@@ -3,23 +3,29 @@ import { useApp } from "@/contexts/AppContext";
 import { Order } from "@/types";
 import { calculateOrder } from "@/utils/calculations";
 import { formatCurrency, formatDate, orderStatusLabels, paymentStatusLabels, orderStatusColors, paymentStatusColors } from "@/utils/formatters";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Eye, Trash2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import OrderCreate from "@/components/orders/OrderCreate";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Orders() {
-  const { orders, deleteOrder, settings, getProduct, getVariant } = useApp();
+  const { orders, deleteOrder, deleteOrders, settings, getProduct, getVariant } = useApp();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [payFilter, setPayFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const sym = settings.currencySymbol;
 
   const filtered = orders.filter(o => {
@@ -29,11 +35,26 @@ export default function Orders() {
     return true;
   });
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(o => o.id)));
+  };
+
   const handleDelete = (id: string) => {
     if (confirm("Bu siparişi silmek istediğinize emin misiniz? Stok geri yüklenecek.")) {
       deleteOrder(id);
       toast.success("Sipariş silindi");
     }
+  };
+
+  const handleBulkDelete = () => {
+    deleteOrders(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setBulkDeleteOpen(false);
+    toast.success(`${selectedIds.size} sipariş silindi`);
   };
 
   return (
@@ -45,6 +66,16 @@ export default function Orders() {
         </div>
         <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1" /> Yeni Sipariş</Button>
       </div>
+
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2.5">
+          <span className="text-sm font-medium">{selectedIds.size} sipariş seçildi</span>
+          <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Seçilenleri Sil
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>İptal</Button>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -72,6 +103,9 @@ export default function Orders() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/50">
+                <th className="p-3 w-10">
+                  <Checkbox checked={selectedIds.size === filtered.length && filtered.length > 0} onCheckedChange={toggleSelectAll} />
+                </th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Sipariş No</th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Tarih</th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Kalem</th>
@@ -87,12 +121,13 @@ export default function Orders() {
                 const calc = calculateOrder(o);
                 return (
                   <tr key={o.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+                    <td className="p-3"><Checkbox checked={selectedIds.has(o.id)} onCheckedChange={() => toggleSelect(o.id)} /></td>
                     <td className="p-3 font-medium">{o.orderNumber}</td>
                     <td className="p-3 text-muted-foreground">{formatDate(o.orderDate)}</td>
                     <td className="p-3">{o.items.length}</td>
                     <td className="p-3"><Badge variant="secondary" className={`text-[10px] ${orderStatusColors[o.orderStatus]}`}>{orderStatusLabels[o.orderStatus]}</Badge></td>
                     <td className="p-3"><Badge variant="secondary" className={`text-[10px] ${paymentStatusColors[o.paymentStatus]}`}>{paymentStatusLabels[o.paymentStatus]}</Badge></td>
-                    <td className="p-3 text-right font-medium">{formatCurrency(calc.netRevenueAfterDiscount, sym)}</td>
+                    <td className="p-3 text-right font-medium">{formatCurrency(calc.taxableAmount, sym)}</td>
                     <td className={`p-3 text-right font-medium ${calc.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>{formatCurrency(calc.netProfit, sym)}</td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -114,7 +149,6 @@ export default function Orders() {
         )}
       </div>
 
-      {/* Create Order Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Yeni Sipariş Oluştur</DialogTitle></DialogHeader>
@@ -122,7 +156,6 @@ export default function Orders() {
         </DialogContent>
       </Dialog>
 
-      {/* Order Detail Dialog */}
       {detailOrder && (
         <Dialog open={!!detailOrder} onOpenChange={() => setDetailOrder(null)}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -131,6 +164,21 @@ export default function Orders() {
           </DialogContent>
         </Dialog>
       )}
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Toplu Silme Onayı</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedIds.size} siparişi silmek istediğinize emin misiniz? Stoklar geri yüklenecek. Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Sil</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -143,6 +191,7 @@ function OrderDetail({ order, sym, getProduct, getVariant }: { order: Order; sym
         <div><span className="text-muted-foreground">Tarih:</span> {formatDate(order.orderDate)}</div>
         <div><span className="text-muted-foreground">Durum:</span> {orderStatusLabels[order.orderStatus]}</div>
         <div><span className="text-muted-foreground">Ödeme:</span> {paymentStatusLabels[order.paymentStatus]}</div>
+        <div><span className="text-muted-foreground">KDV:</span> %{order.taxRate}</div>
       </div>
 
       <div>
@@ -167,18 +216,19 @@ function OrderDetail({ order, sym, getProduct, getVariant }: { order: Order; sym
       </div>
 
       <div className="bg-secondary/50 rounded-lg p-4 space-y-2 text-sm">
-        <Row label="Brüt Gelir" value={formatCurrency(calc.grossRevenue, sym)} />
+        <Row label="Ara Toplam" value={formatCurrency(calc.subtotal, sym)} />
         <Row label="Toplam İndirim" value={`-${formatCurrency(calc.totalDiscount, sym)}`} />
-        <Row label="İndirim Sonrası Gelir" value={formatCurrency(calc.netRevenueAfterDiscount, sym)} bold />
+        <Row label="Vergilenebilir Tutar" value={formatCurrency(calc.taxableAmount, sym)} bold />
         <div className="border-t border-border my-2" />
-        <Row label="KDV" value={formatCurrency(calc.totalTax, sym)} />
-        <Row label="Vergisiz Gelir" value={formatCurrency(calc.netRevenueExTax, sym)} />
+        <Row label={`KDV (%${order.taxRate})`} value={formatCurrency(calc.totalTax, sym)} />
         <div className="border-t border-border my-2" />
         <Row label="Ürün Maliyeti" value={formatCurrency(calc.totalProductCost, sym)} />
         <Row label="Hediye Maliyeti" value={formatCurrency(calc.giftCost, sym)} />
         <Row label="Kargo Maliyeti" value={formatCurrency(calc.shippingCost, sym)} />
         <Row label="Ambalaj Maliyeti" value={formatCurrency(calc.packagingCost, sym)} />
-        <Row label="Komisyon" value={formatCurrency(calc.commissionCost, sym)} />
+        <Row label="Ödeme Komisyonu" value={formatCurrency(calc.paymentCommissionCost, sym)} />
+        <Row label="Shopify Komisyonu" value={formatCurrency(calc.shopifyCommissionCost, sym)} />
+        <Row label="Toplam Komisyon" value={formatCurrency(calc.totalCommissionCost, sym)} bold />
         <Row label="Ek Gider" value={formatCurrency(calc.extraExpense, sym)} />
         <div className="border-t border-border my-2" />
         <Row label="Brüt Kâr" value={formatCurrency(calc.grossProfit, sym)} bold />

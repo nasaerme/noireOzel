@@ -1,67 +1,53 @@
-import { Order, OrderItem, OrderCalculation } from '@/types';
-
-export function calculateOrderItem(item: OrderItem) {
-  if (item.isGift) {
-    return {
-      lineRevenue: 0,
-      lineCost: item.unitCostPrice * item.quantity,
-      lineTax: 0,
-      lineGrossProfit: -(item.unitCostPrice * item.quantity),
-    };
-  }
-  const lineRevenue = item.unitSalePrice * item.quantity;
-  const lineTax = lineRevenue * (item.taxRate / 100);
-  const lineCost = item.unitCostPrice * item.quantity;
-  const lineGrossProfit = lineRevenue - lineTax - lineCost;
-  return { lineRevenue, lineCost, lineTax, lineGrossProfit };
-}
+import { Order, OrderCalculation } from '@/types';
 
 export function calculateOrder(order: Order): OrderCalculation {
-  let grossRevenue = 0;
-  let totalTaxFromItems = 0;
+  let subtotal = 0;
   let totalProductCost = 0;
   let giftCost = 0;
 
   order.items.forEach(item => {
-    const calc = calculateOrderItem(item);
-    grossRevenue += calc.lineRevenue;
-    totalTaxFromItems += calc.lineTax;
-    totalProductCost += item.isGift ? 0 : calc.lineCost;
-    giftCost += item.isGift ? calc.lineCost : 0;
+    if (item.isGift) {
+      giftCost += item.unitCostPrice * item.quantity;
+    } else {
+      subtotal += item.unitSalePrice * item.quantity;
+      totalProductCost += item.unitCostPrice * item.quantity;
+    }
   });
-
-  grossRevenue += order.shippingRevenue;
 
   // Discount
   let totalDiscount = order.discountAmount;
   if (order.discountRate > 0) {
-    totalDiscount += grossRevenue * (order.discountRate / 100);
+    totalDiscount += subtotal * (order.discountRate / 100);
   }
 
-  const netRevenueAfterDiscount = grossRevenue - totalDiscount;
-  const totalTax = totalTaxFromItems;
-  const netRevenueExTax = netRevenueAfterDiscount - totalTax;
+  const taxableAmount = subtotal - totalDiscount;
 
-  // Commission on net revenue after discount
-  const commissionCost = netRevenueAfterDiscount * (order.commissionRate / 100) + order.commissionFixed;
+  // Tax on discounted amount
+  const totalTax = taxableAmount * (order.taxRate / 100);
 
-  const totalCost = totalProductCost + giftCost + order.shippingCost + order.packagingCost + commissionCost + order.extraExpense;
+  // Commissions on taxable amount
+  const paymentCommissionCost = taxableAmount * (order.paymentCommissionRate / 100) + order.paymentCommissionFixed;
+  const shopifyCommissionCost = taxableAmount * (order.shopifyCommissionRate / 100) + order.shopifyCommissionFixed;
+  const totalCommissionCost = paymentCommissionCost + shopifyCommissionCost;
 
-  const grossProfit = netRevenueAfterDiscount - totalProductCost - giftCost;
-  const netProfit = netRevenueExTax - totalCost;
-  const profitMargin = netRevenueAfterDiscount > 0 ? (netProfit / netRevenueAfterDiscount) * 100 : 0;
+  const totalCost = totalProductCost + giftCost + order.shippingCost + order.packagingCost + totalCommissionCost + order.extraExpense;
+
+  const grossProfit = taxableAmount - totalProductCost - giftCost;
+  const netProfit = taxableAmount - totalTax - totalCost;
+  const profitMargin = taxableAmount > 0 ? (netProfit / taxableAmount) * 100 : 0;
 
   return {
-    grossRevenue,
+    subtotal,
     totalDiscount,
-    netRevenueAfterDiscount,
+    taxableAmount,
     totalTax,
-    netRevenueExTax,
     totalProductCost,
     giftCost,
     shippingCost: order.shippingCost,
     packagingCost: order.packagingCost,
-    commissionCost,
+    paymentCommissionCost,
+    shopifyCommissionCost,
+    totalCommissionCost,
     extraExpense: order.extraExpense,
     totalCost,
     grossProfit,

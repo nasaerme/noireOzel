@@ -1,10 +1,10 @@
 import { useApp } from "@/contexts/AppContext";
 import { calculateOrder } from "@/utils/calculations";
 import { formatCurrency } from "@/utils/formatters";
-import { TrendingUp, TrendingDown, ShoppingCart, Package, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { TrendingUp, TrendingDown, ShoppingCart, ArrowUpRight, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { orderStatusLabels, paymentStatusLabels, orderStatusColors, paymentStatusColors, formatDate } from "@/utils/formatters";
+import { orderStatusLabels, orderStatusColors, formatDate } from "@/utils/formatters";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo } from "react";
 
@@ -24,15 +24,15 @@ export default function Dashboard() {
       const calc = calculateOrder(o);
       const d = new Date(o.orderDate);
       if (o.orderDate.startsWith(todayStr)) {
-        todayRev += calc.netRevenueAfterDiscount;
+        todayRev += calc.taxableAmount;
         todayProfit += calc.netProfit;
       }
       if (d >= weekAgo) {
-        weekRev += calc.netRevenueAfterDiscount;
+        weekRev += calc.taxableAmount;
         weekProfit += calc.netProfit;
       }
       if (d >= monthStart) {
-        monthRev += calc.netRevenueAfterDiscount;
+        monthRev += calc.taxableAmount;
         monthProfit += calc.netProfit;
       }
     });
@@ -42,7 +42,7 @@ export default function Dashboard() {
     return { todayRev, todayProfit, weekRev, weekProfit, monthRev, monthProfit, totalExpenses };
   }, [orders, expenses, todayStr, weekAgo, monthStart]);
 
-  const lowStockVariants = useMemo(() => 
+  const lowStockVariants = useMemo(() =>
     variants.filter(v => v.stock <= v.lowStockThreshold).slice(0, 8),
     [variants]
   );
@@ -58,7 +58,7 @@ export default function Dashboard() {
         const key = o.orderDate.split('T')[0];
         if (!days[key]) days[key] = { date: key, gelir: 0, kar: 0 };
         const calc = calculateOrder(o);
-        days[key].gelir += calc.netRevenueAfterDiscount;
+        days[key].gelir += calc.taxableAmount;
         days[key].kar += calc.netProfit;
       }
     });
@@ -87,7 +87,6 @@ export default function Dashboard() {
         <p className="text-muted-foreground text-sm mt-1">İşletme özetiniz</p>
       </div>
 
-      {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard title="Bugünkü Gelir" value={formatCurrency(metrics.todayRev, sym)} icon={<TrendingUp className="h-4 w-4" />} accent />
         <MetricCard title="Bugünkü Kâr" value={formatCurrency(metrics.todayProfit, sym)} icon={<TrendingDown className="h-4 w-4" />} />
@@ -98,10 +97,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <MetricCard title="Bu Hafta Kâr" value={formatCurrency(metrics.weekProfit, sym)} />
         <MetricCard title="Bu Ay Kâr" value={formatCurrency(metrics.monthProfit, sym)} />
-        <MetricCard title="Toplam Gider" value={formatCurrency(metrics.totalExpenses, sym)} icon={<Receipt className="h-4 w-4" />} />
+        <MetricCard title="Toplam Gider" value={formatCurrency(metrics.totalExpenses, sym)} icon={<ReceiptIcon className="h-4 w-4" />} />
       </div>
 
-      {/* Chart */}
       {chartData.length > 0 && (
         <Card>
           <CardHeader>
@@ -125,7 +123,6 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Orders */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Son Siparişler</CardTitle>
@@ -144,7 +141,7 @@ export default function Dashboard() {
                       <Badge variant="secondary" className={`text-[10px] ${orderStatusColors[o.orderStatus]}`}>
                         {orderStatusLabels[o.orderStatus]}
                       </Badge>
-                      <span className="text-sm font-medium w-24 text-right">{formatCurrency(calc.netRevenueAfterDiscount, sym)}</span>
+                      <span className="text-sm font-medium w-24 text-right">{formatCurrency(calc.taxableAmount, sym)}</span>
                     </div>
                   </div>
                 );
@@ -153,7 +150,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Low Stock + Top Products */}
         <div className="space-y-6">
           {lowStockVariants.length > 0 && (
             <Card>
@@ -197,7 +193,7 @@ export default function Dashboard() {
   );
 }
 
-function Receipt(props: React.SVGAttributes<SVGElement>) {
+function ReceiptIcon(props: React.SVGAttributes<SVGElement>) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M14 8H8"/><path d="M16 12H8"/><path d="M13 16H8"/></svg>
   );

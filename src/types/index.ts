@@ -5,7 +5,6 @@ export interface Product {
   category: string;
   salePrice: number;
   costPrice: number;
-  taxRate: number;
   notes: string;
   active: boolean;
   createdAt: string;
@@ -29,7 +28,6 @@ export interface OrderItem {
   quantity: number;
   unitSalePrice: number;
   unitCostPrice: number;
-  taxRate: number;
   isGift: boolean;
 }
 
@@ -37,11 +35,13 @@ export interface Order {
   id: string;
   orderNumber: string;
   items: OrderItem[];
-  shippingRevenue: number;
+  taxRate: number;
   shippingCost: number;
   packagingCost: number;
-  commissionRate: number;
-  commissionFixed: number;
+  paymentCommissionRate: number;
+  paymentCommissionFixed: number;
+  shopifyCommissionRate: number;
+  shopifyCommissionFixed: number;
   discountAmount: number;
   discountRate: number;
   extraExpense: number;
@@ -84,16 +84,17 @@ export interface Settings {
 }
 
 export interface OrderCalculation {
-  grossRevenue: number;
+  subtotal: number;
   totalDiscount: number;
-  netRevenueAfterDiscount: number;
+  taxableAmount: number;
   totalTax: number;
-  netRevenueExTax: number;
   totalProductCost: number;
   giftCost: number;
   shippingCost: number;
   packagingCost: number;
-  commissionCost: number;
+  paymentCommissionCost: number;
+  shopifyCommissionCost: number;
+  totalCommissionCost: number;
   extraExpense: number;
   totalCost: number;
   grossProfit: number;
