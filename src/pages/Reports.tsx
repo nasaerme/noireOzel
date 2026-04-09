@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
-type Period = 'today' | 'week' | 'month' | 'custom';
+type Period = 'today' | 'yesterday' | 'week' | 'month' | 'last_month' | 'specific_month' | 'custom';
 
 export default function Reports() {
   const { orders, expenses, products, variants, settings } = useApp();
@@ -16,6 +16,8 @@ export default function Reports() {
   const [period, setPeriod] = useState<Period>('month');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
 
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -25,6 +27,10 @@ export default function Reports() {
         start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
         break;
+      case 'yesterday':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59);
+        break;
       case 'week':
         start = new Date(now.getTime() - 7 * 86400000);
         end = now;
@@ -32,6 +38,14 @@ export default function Reports() {
       case 'month':
         start = new Date(now.getFullYear(), now.getMonth(), 1);
         end = now;
+        break;
+      case 'last_month':
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        break;
+      case 'specific_month':
+        start = new Date(selectedYear, selectedMonth, 1);
+        end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59);
         break;
       case 'custom':
         start = startDate ? new Date(startDate) : new Date(now.getFullYear(), 0, 1);
@@ -42,7 +56,7 @@ export default function Reports() {
         end = now;
     }
     return { start, end };
-  }, [period, startDate, endDate]);
+  }, [period, startDate, endDate, selectedYear, selectedMonth]);
 
   const metrics = useMemo(() => {
     const filteredOrders = orders.filter(o => {
@@ -146,12 +160,44 @@ export default function Reports() {
             <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="today">Bugün</SelectItem>
+              <SelectItem value="yesterday">Dün</SelectItem>
               <SelectItem value="week">Bu Hafta</SelectItem>
               <SelectItem value="month">Bu Ay</SelectItem>
+              <SelectItem value="last_month">Geçen Ay</SelectItem>
+              <SelectItem value="specific_month">Aylık Seçim</SelectItem>
               <SelectItem value="custom">Özel Tarih</SelectItem>
             </SelectContent>
           </Select>
         </div>
+        
+        {period === 'specific_month' && (
+          <>
+            <div>
+              <Label className="text-xs">Yıl</Label>
+              <Select value={selectedYear.toString()} onValueChange={v => setSelectedYear(parseInt(v))}>
+                <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[0, 1, 2, 3, 4].map(offset => {
+                    const y = new Date().getFullYear() - offset;
+                    return <SelectItem key={y} value={y.toString()}>{y}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Ay</Label>
+              <Select value={selectedMonth.toString()} onValueChange={v => setSelectedMonth(parseInt(v))}>
+                <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'].map((m, i) => (
+                    <SelectItem key={i} value={i.toString()}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+
         {period === 'custom' && (
           <>
             <div><Label className="text-xs">Başlangıç</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[160px]" /></div>
