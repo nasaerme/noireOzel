@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
-type Period = 'today' | 'yesterday' | 'week' | 'month' | 'last_month' | 'specific_month' | 'custom';
+type Period = 'today' | 'yesterday' | 'week' | 'month' | 'last_month' | 'specific_month' | 'all_time' | 'custom';
 
 export default function Reports() {
   const { orders, expenses, products, variants, settings } = useApp();
@@ -42,6 +42,10 @@ export default function Reports() {
       case 'last_month':
         start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        break;
+      case 'all_time':
+        start = new Date(2000, 0, 1);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
         break;
       case 'specific_month':
         start = new Date(selectedYear, selectedMonth, 1);
@@ -165,6 +169,7 @@ export default function Reports() {
               <SelectItem value="month">Bu Ay</SelectItem>
               <SelectItem value="last_month">Geçen Ay</SelectItem>
               <SelectItem value="specific_month">Aylık Seçim</SelectItem>
+              <SelectItem value="all_time">Tüm Zamanlar</SelectItem>
               <SelectItem value="custom">Özel Tarih</SelectItem>
             </SelectContent>
           </Select>
