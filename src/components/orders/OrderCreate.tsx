@@ -19,17 +19,17 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
   const [taxRate, setTaxRate] = useState(settings.defaultTaxRate);
   const [shippingCost, setShippingCost] = useState(25);
   const [packagingCost, setPackagingCost] = useState(5);
-  const [paymentCommissionRate, setPaymentCommissionRate] = useState(2.49);
-  const [paymentCommissionFixed, setPaymentCommissionFixed] = useState(0.25);
-  const [shopifyCommissionRate, setShopifyCommissionRate] = useState(2.0);
-  const [shopifyCommissionFixed, setShopifyCommissionFixed] = useState(0);
+  const [paymentCommissionRate, setPaymentCommissionRate] = useState(settings.defaultPaymentCommissionRate ?? 2.49);
+  const [paymentCommissionFixed, setPaymentCommissionFixed] = useState(settings.defaultPaymentCommissionFixed ?? 0.25);
+  const [shopifyCommissionRate, setShopifyCommissionRate] = useState(settings.defaultShopifyCommissionRate ?? 2.0);
+  const [shopifyCommissionFixed, setShopifyCommissionFixed] = useState(settings.defaultShopifyCommissionFixed ?? 0);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountRate, setDiscountRate] = useState(0);
   const [extraExpense, setExtraExpense] = useState(0);
   const [notes, setNotes] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
-  const [paymentStatus, setPaymentStatus] = useState<'beklemede' | 'odendi'>('beklemede');
-  const [orderStatus, setOrderStatus] = useState<'yeni' | 'hazirlaniyor' | 'kargoda' | 'teslim_edildi'>('yeni');
+  const [paymentStatus] = useState<'beklemede' | 'odendi'>('beklemede');
+  const [orderStatus] = useState<'yeni' | 'hazirlaniyor' | 'kargoda' | 'teslim_edildi'>('yeni');
 
   const addItem = (isGift = false) => {
     setItems([...items, {
@@ -84,18 +84,34 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
   const handleSave = () => {
     if (items.length === 0) { toast.error("En az bir ürün ekleyin"); return; }
     if (items.some(i => !i.productId || !i.variantId)) { toast.error("Tüm ürün ve varyantları seçin"); return; }
+    if (items.some(i => i.quantity <= 0 || isNaN(i.quantity))) { toast.error("Geçerli bir adet girin"); return; }
 
-    const stockWarnings: string[] = [];
+    // Ürün varyantı bazında toplam istenen miktarı hesapla (hediyeler + normal satışlar birleşir)
+    const variantQuantities: Record<string, { total: number; productId: string }> = {};
     items.forEach(item => {
-      const v = variants.find(x => x.id === item.variantId);
-      if (v && v.stock < item.quantity) {
-        const p = products.find(x => x.id === item.productId);
-        stockWarnings.push(`${p?.name} ${v.name}: ${v.stock} stokta, ${item.quantity} isteniyor`);
+      if (item.variantId && item.productId) {
+        if (!variantQuantities[item.variantId]) {
+          variantQuantities[item.variantId] = { total: 0, productId: item.productId };
+        }
+        variantQuantities[item.variantId].total += item.quantity;
       }
     });
 
-    if (stockWarnings.length > 0) {
-      if (!confirm(`Stok uyarısı:\n${stockWarnings.join('\n')}\n\nDevam etmek istiyor musunuz?`)) return;
+    const stockErrors: string[] = [];
+    for (const [variantId, data] of Object.entries(variantQuantities)) {
+      const v = variants.find(x => x.id === variantId);
+      if (v && v.stock < data.total) {
+        const p = products.find(x => x.id === data.productId);
+        stockErrors.push(`${p?.name} (${v.name}): Stokta ${v.stock} adet var, toplam ${data.total} isteniyor.`);
+      }
+    }
+
+    if (stockErrors.length > 0) {
+      toast.error("Yetersiz Stok!", {
+        description: stockErrors.join('\n'),
+        duration: 5000,
+      });
+      return; // Kaydetmeyi KESİNLİKLE engelle
     }
 
     addOrder({
@@ -161,30 +177,8 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div><Label className="text-xs">Sipariş Tarihi</Label><Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="text-xs" /></div>
-          <div>
-            <Label className="text-xs">Sipariş Durumu</Label>
-            <Select value={orderStatus} onValueChange={(v: any) => setOrderStatus(v)}>
-              <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="yeni">Yeni</SelectItem>
-                <SelectItem value="hazirlaniyor">Hazırlanıyor</SelectItem>
-                <SelectItem value="kargoda">Kargoda</SelectItem>
-                <SelectItem value="teslim_edildi">Teslim Edildi</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Ödeme Durumu</Label>
-            <Select value={paymentStatus} onValueChange={(v: any) => setPaymentStatus(v)}>
-              <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="beklemede">Beklemede</SelectItem>
-                <SelectItem value="odendi">Ödendi</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div>
+          <div><Label className="text-xs">Sipariş Tarihi</Label><Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="text-xs w-full sm:w-1/3" /></div>
         </div>
 
         {/* Tax & Discounts */}
@@ -228,8 +222,8 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
           <h3 className="font-semibold mb-3">Sipariş Özeti</h3>
           <SummaryRow label="Ara Toplam" value={formatCurrency(calc.subtotal, sym)} />
           {calc.totalDiscount > 0 && <SummaryRow label="İndirim" value={`-${formatCurrency(calc.totalDiscount, sym)}`} warn />}
-          <SummaryRow label="Vergilenebilir Tutar" value={formatCurrency(calc.taxableAmount, sym)} bold />
-          <SummaryRow label={`KDV (%${taxRate})`} value={formatCurrency(calc.totalTax, sym)} />
+          <SummaryRow label="Sipariş Toplamı" value={formatCurrency(calc.taxableAmount, sym)} bold />
+          <SummaryRow label={`Vergiler (KDV %${taxRate} Dahil)`} value={formatCurrency(calc.totalTax, sym)} />
           <div className="border-t border-border" />
           <SummaryRow label="Ürün Maliyeti" value={formatCurrency(calc.totalProductCost, sym)} />
           {calc.giftCost > 0 && <SummaryRow label="Hediye Maliyeti" value={formatCurrency(calc.giftCost, sym)} />}

@@ -22,8 +22,9 @@ export function calculateOrder(order: Order): OrderCalculation {
 
   const taxableAmount = subtotal - totalDiscount;
 
-  // Tax on discounted amount
-  const totalTax = taxableAmount * (order.taxRate / 100);
+  // Tax calculation (KDV Dahil - Included Tax)
+  // If Tax Rate is 10%, Total Tax in 1984 is 1984 - (1984 / 1.1)
+  const totalTax = taxableAmount - (taxableAmount / (1 + (order.taxRate / 100)));
 
   // Commissions on taxable amount
   const paymentCommissionCost = taxableAmount * (order.paymentCommissionRate / 100) + order.paymentCommissionFixed;

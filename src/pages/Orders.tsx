@@ -218,9 +218,9 @@ function OrderDetail({ order, sym, getProduct, getVariant }: { order: Order; sym
       <div className="bg-secondary/50 rounded-lg p-4 space-y-2 text-sm">
         <Row label="Ara Toplam" value={formatCurrency(calc.subtotal, sym)} />
         <Row label="Toplam İndirim" value={`-${formatCurrency(calc.totalDiscount, sym)}`} />
-        <Row label="Vergilenebilir Tutar" value={formatCurrency(calc.taxableAmount, sym)} bold />
+        <Row label="Sipariş Toplamı" value={formatCurrency(calc.taxableAmount, sym)} bold />
         <div className="border-t border-border my-2" />
-        <Row label={`KDV (%${order.taxRate})`} value={formatCurrency(calc.totalTax, sym)} />
+        <Row label={`Vergiler (KDV %${order.taxRate} Dahil)`} value={formatCurrency(calc.totalTax, sym)} />
         <div className="border-t border-border my-2" />
         <Row label="Ürün Maliyeti" value={formatCurrency(calc.totalProductCost, sym)} />
         <Row label="Hediye Maliyeti" value={formatCurrency(calc.giftCost, sym)} />

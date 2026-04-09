@@ -81,6 +81,10 @@ export interface Settings {
   businessEmail: string;
   categories: string[];
   expenseCategories: ExpenseCategory[];
+  defaultPaymentCommissionRate: number;
+  defaultPaymentCommissionFixed: number;
+  defaultShopifyCommissionRate: number;
+  defaultShopifyCommissionFixed: number;
 }
 
 export interface OrderCalculation {
