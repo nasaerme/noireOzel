@@ -53,14 +53,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch Settings
+        // Fetch Settings & Expense Categories
         const { data: setD } = await supabase.from('settings').select('*').limit(1).single();
+        const { data: ecD } = await supabase.from('expense_categories').select('*');
+        const loadedExpCategories = ecD ? ecD.map(c => ({ id: c.id, name: c.name, color: c.color })) : [];
+
         if (setD) {
           setSettings({
             language: setD.language, currency: setD.currency, currencySymbol: setD.currency_symbol,
             defaultTaxRate: setD.default_tax_rate, businessName: setD.business_name || '',
             businessAddress: setD.business_address || '', businessPhone: setD.business_phone || '',
-            businessEmail: setD.business_email || '', categories: setD.categories || [], expenseCategories: [],
+            businessEmail: setD.business_email || '', categories: setD.categories || [], expenseCategories: loadedExpCategories,
             defaultPaymentCommissionRate: setD.default_payment_commission_rate ?? 2.49,
             defaultPaymentCommissionFixed: setD.default_payment_commission_fixed ?? 0.25,
             defaultShopifyCommissionRate: setD.default_shopify_commission_rate ?? 2.0,
@@ -279,7 +282,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     supabase.from('expenses').insert({
       id, date: e.date, category_id: e.categoryId || null, description: e.description,
       amount: e.amount, recurring: e.recurring, frequency: e.frequency, notes: e.notes, created_at: createdAt
-    }).then();
+    }).then(({ error }) => {
+      if (error) {
+         console.error("Gider ekleme hatası:", error);
+         toast.error("Gider kaydedilemedi: " + error.message);
+      }
+    });
   }, []);
 
   const updateExpense = useCallback((e: Expense) => {
@@ -305,6 +313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateSettings = useCallback((s: Partial<Settings>) => {
     setSettings(prev => { 
       const next = { ...prev, ...s };
+      
       supabase.from('settings').select('id').limit(1).single().then(({ data }) => {
         if (data) {
           supabase.from('settings').update({
@@ -319,6 +328,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }).eq('id', data.id).then();
         }
       });
+
+      // Synchronize Expense Categories
+      if (s.expenseCategories !== undefined) {
+         const prevIds = prev.expenseCategories.map(c => c.id);
+         const nextIds = s.expenseCategories.map(c => c.id);
+         const toDelete = prevIds.filter(id => !nextIds.includes(id));
+         const toUpsert = s.expenseCategories.map(c => ({ id: c.id, name: c.name, color: c.color }));
+         
+         if (toDelete.length > 0) {
+            supabase.from('expense_categories').delete().in('id', toDelete).then();
+         }
+         if (toUpsert.length > 0) {
+            supabase.from('expense_categories').upsert(toUpsert).then();
+         }
+      }
+
       return next;
     });
   }, []);
