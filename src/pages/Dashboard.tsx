@@ -123,7 +123,7 @@ export default function Dashboard() {
       {chartData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Son 14 Gün Gelir & Kâr</CardTitle>
+            <CardTitle className="text-base">Son 14 Gün Sipariş Gelir & Kâr</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">

@@ -96,6 +96,7 @@ export default function Reports() {
 
     const totalBusinessExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
     const totalOrderCosts = totalTax + totalProductCost + giftCost + shippingCost + packagingCost + totalCommission;
+    const totalExpensesAll = totalOrderCosts + totalBusinessExpenses;
     const grossProfit = subtotal - totalProductCost - giftCost;
     const netProfit = subtotal - totalOrderCosts - totalBusinessExpenses;
     const profitMargin = subtotal > 0 ? (netProfit / subtotal) * 100 : 0;
@@ -143,7 +144,7 @@ export default function Reports() {
     return {
       totalOrders, unitsSold, subtotal, totalTax, totalProductCost,
       shippingCost, packagingCost, paymentCommission, shopifyCommission, totalCommission,
-      giftCost, totalDiscounts, totalOrderCosts,
+      giftCost, totalDiscounts, totalOrderCosts, totalExpensesAll,
       totalBusinessExpenses, grossProfit, netProfit, profitMargin,
       topProducts, topVariants, expBreakdown, timeData,
     };
@@ -222,25 +223,43 @@ export default function Reports() {
       </div>
 
       {/* Detail breakdown */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KPI label="KDV" value={formatCurrency(metrics.totalTax, sym)} small />
-        <KPI label="Ürün Maliyeti" value={formatCurrency(metrics.totalProductCost, sym)} small />
-        <KPI label="Kargo" value={formatCurrency(metrics.shippingCost, sym)} small />
-        <KPI label="Ambalaj" value={formatCurrency(metrics.packagingCost, sym)} small />
-        <KPI label="Ödeme Komisyonu" value={formatCurrency(metrics.paymentCommission, sym)} small />
-        <KPI label="Shopify Komisyonu" value={formatCurrency(metrics.shopifyCommission, sym)} small />
-        <KPI label="Toplam Komisyon" value={formatCurrency(metrics.totalCommission, sym)} small />
-        <KPI label="Hediye Maliyeti" value={formatCurrency(metrics.giftCost, sym)} small />
-        <KPI label="İndirimler" value={formatCurrency(metrics.totalDiscounts, sym)} small />
-        <KPI label="Toplam Sipariş Maliyeti" value={formatCurrency(metrics.totalOrderCosts, sym)} small />
-        <KPI label="Diğer İşletme Giderleri" value={formatCurrency(metrics.totalBusinessExpenses, sym)} small />
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Sipariş Maliyetleri</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+            <KPI label="Ürün Maliyeti" value={formatCurrency(metrics.totalProductCost, sym)} small />
+            <KPI label="KDV" value={formatCurrency(metrics.totalTax, sym)} small />
+            <KPI label="Kargo" value={formatCurrency(metrics.shippingCost, sym)} small />
+            <KPI label="Ambalaj" value={formatCurrency(metrics.packagingCost, sym)} small />
+            <KPI label="Hediye Maliyeti" value={formatCurrency(metrics.giftCost, sym)} small />
+            <KPI label="İndirimler" value={formatCurrency(metrics.totalDiscounts, sym)} small />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Komisyonlar</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <KPI label="Ödeme Komisyonu" value={formatCurrency(metrics.paymentCommission, sym)} small />
+            <KPI label="Shopify Komisyonu" value={formatCurrency(metrics.shopifyCommission, sym)} small />
+            <KPI label="Toplam Komisyon" value={formatCurrency(metrics.totalCommission, sym)} small />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Gider Özeti</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <KPI label="Toplam Sipariş Maliyeti" value={formatCurrency(metrics.totalOrderCosts, sym)} small />
+            <KPI label="İşletme Giderleri" value={formatCurrency(metrics.totalBusinessExpenses, sym)} small />
+            <KPI label="Genel Toplam Gider" value={formatCurrency(metrics.totalExpensesAll, sym)} small accent />
+          </div>
+        </div>
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {metrics.timeData.length > 0 && (
           <Card>
-            <CardHeader><CardTitle className="text-base">Gelir & Kâr Trendi</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Sipariş Gelir & Kâr Trendi</CardTitle></CardHeader>
             <CardContent>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
