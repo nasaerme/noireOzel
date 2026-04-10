@@ -18,7 +18,9 @@ export default function Dashboard() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const metrics = useMemo(() => {
-    let todayRev = 0, todayProfit = 0, weekRev = 0, weekProfit = 0, monthRev = 0, monthProfit = 0;
+    let todayRev = 0, todayProfit = 0, todayOrders = 0;
+    let weekRev = 0, weekProfit = 0;
+    let monthRev = 0, monthProfit = 0, monthOrders = 0;
 
     orders.forEach(o => {
       const calc = calculateOrder(o);
@@ -26,6 +28,7 @@ export default function Dashboard() {
       if (o.orderDate.startsWith(todayStr)) {
         todayRev += calc.taxableAmount;
         todayProfit += calc.netProfit;
+        todayOrders++;
       }
       if (d >= weekAgo) {
         weekRev += calc.taxableAmount;
@@ -34,12 +37,14 @@ export default function Dashboard() {
       if (d >= monthStart) {
         monthRev += calc.taxableAmount;
         monthProfit += calc.netProfit;
+        monthOrders++;
       }
     });
 
+    const monthExpenses = expenses.filter(e => new Date(e.date) >= monthStart).reduce((s, e) => s + e.amount, 0);
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
 
-    return { todayRev, todayProfit, weekRev, weekProfit, monthRev, monthProfit, totalExpenses };
+    return { todayRev, todayProfit, todayOrders, weekRev, weekProfit, monthRev, monthProfit, monthOrders, monthExpenses, totalExpenses };
   }, [orders, expenses, todayStr, weekAgo, monthStart]);
 
   const lowStockVariants = useMemo(() =>
@@ -87,17 +92,25 @@ export default function Dashboard() {
         <p className="text-muted-foreground text-sm mt-1">İşletme özetiniz</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Bugünkü Gelir" value={formatCurrency(metrics.todayRev, sym)} icon={<TrendingUp className="h-4 w-4" />} accent />
-        <MetricCard title="Bugünkü Kâr" value={formatCurrency(metrics.todayProfit, sym)} icon={<TrendingDown className="h-4 w-4" />} />
-        <MetricCard title="Bu Hafta Gelir" value={formatCurrency(metrics.weekRev, sym)} icon={<ShoppingCart className="h-4 w-4" />} />
-        <MetricCard title="Bu Ay Gelir" value={formatCurrency(metrics.monthRev, sym)} icon={<ArrowUpRight className="h-4 w-4" />} />
-      </div>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Bugün</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <MetricCard title="Gelir" value={formatCurrency(metrics.todayRev, sym)} icon={<TrendingUp className="h-4 w-4" />} accent />
+            <MetricCard title="Net Kâr" value={formatCurrency(metrics.todayProfit, sym)} isNegative={metrics.todayProfit < 0} />
+            <MetricCard title="Sipariş" value={metrics.todayOrders.toString()} icon={<ShoppingCart className="h-4 w-4" />} />
+          </div>
+        </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <MetricCard title="Bu Hafta Kâr" value={formatCurrency(metrics.weekProfit, sym)} />
-        <MetricCard title="Bu Ay Kâr" value={formatCurrency(metrics.monthProfit, sym)} />
-        <MetricCard title="Toplam Gider" value={formatCurrency(metrics.totalExpenses, sym)} icon={<ReceiptIcon className="h-4 w-4" />} />
+        <div className="space-y-2">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Bu Ay</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard title="Gelir" value={formatCurrency(metrics.monthRev, sym)} icon={<ArrowUpRight className="h-4 w-4" />} />
+            <MetricCard title="Net Kâr" value={formatCurrency(metrics.monthProfit, sym)} isNegative={metrics.monthProfit < 0} />
+            <MetricCard title="Gider" value={formatCurrency(metrics.monthExpenses, sym)} icon={<ReceiptIcon className="h-4 w-4" />} />
+            <MetricCard title="Sipariş" value={metrics.monthOrders.toString()} icon={<ShoppingCart className="h-4 w-4" />} />
+          </div>
+        </div>
       </div>
 
       {chartData.length > 0 && (
@@ -199,14 +212,15 @@ function ReceiptIcon(props: React.SVGAttributes<SVGElement>) {
   );
 }
 
-function MetricCard({ title, value, icon, accent }: { title: string; value: string; icon?: React.ReactNode; accent?: boolean }) {
+function MetricCard({ title, value, icon, accent, isNegative }: { title: string; value: string; icon?: React.ReactNode; accent?: boolean; isNegative?: boolean }) {
+  const textColor = isNegative ? 'text-destructive' : '';
   return (
     <div className={`metric-card ${accent ? 'border-primary/30 bg-primary/5' : ''}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{title}</span>
         {icon && <span className="text-muted-foreground">{icon}</span>}
       </div>
-      <p className="text-xl font-bold">{value}</p>
+      <p className={`text-xl font-bold ${textColor}`}>{value}</p>
     </div>
   );
 }
