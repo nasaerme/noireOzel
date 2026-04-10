@@ -43,7 +43,7 @@ export default function Expenses() {
     if (search && !e.description.toLowerCase().includes(search.toLowerCase())) return false;
     if (catFilter !== "all" && e.categoryId !== catFilter) return false;
     return true;
-  });
+  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const totalExpenses = filtered.reduce((s, e) => s + e.amount, 0);
   const getCat = (id: string) => settings.expenseCategories.find(c => c.id === id);

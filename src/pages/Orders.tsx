@@ -33,7 +33,7 @@ export default function Orders() {
     if (statusFilter !== "all" && o.orderStatus !== statusFilter) return false;
     if (payFilter !== "all" && o.paymentStatus !== payFilter) return false;
     return true;
-  });
+  }).sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
