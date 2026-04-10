@@ -250,7 +250,7 @@ export default function Reports() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <KPI label="Toplam Sipariş Maliyeti" value={formatCurrency(metrics.totalOrderCosts, sym)} small />
             <KPI label="İşletme Giderleri" value={formatCurrency(metrics.totalBusinessExpenses, sym)} small />
-            <KPI label="Genel Toplam Gider" value={formatCurrency(metrics.totalExpensesAll, sym)} small accent />
+            <KPI label="Genel Toplam Gider" value={formatCurrency(metrics.totalExpensesAll, sym)} small />
           </div>
         </div>
       </div>
