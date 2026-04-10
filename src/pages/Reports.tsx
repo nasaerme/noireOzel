@@ -249,7 +249,11 @@ export default function Reports() {
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} formatter={(value: number) => formatCurrency(value, sym)} />
                     <Legend />
                     <Bar dataKey="gelir" name="Gelir" fill="hsl(var(--chart-2))" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="kar" name="Kâr" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="kar" name="Kâr" radius={[2, 2, 0, 0]}>
+                      {metrics.timeData.map((entry, index) => (
+                        <Cell key={`cell-kar-${index}`} fill={entry.kar < 0 ? 'hsl(var(--destructive))' : 'hsl(var(--chart-1))'} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
