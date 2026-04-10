@@ -324,10 +324,13 @@ export default function Reports() {
 }
 
 function KPI({ label, value, accent, small }: { label: string; value: string; accent?: boolean; small?: boolean }) {
+  const isNegative = value.includes('-');
+  const colorClass = isNegative ? 'text-destructive' : (accent ? 'text-primary' : '');
+  
   return (
     <div className={`metric-card ${small ? 'p-3' : ''}`}>
       <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
-      <p className={`font-bold ${accent ? 'text-primary' : ''} ${small ? 'text-base' : 'text-lg'}`}>{value}</p>
+      <p className={`font-bold ${colorClass} ${small ? 'text-base' : 'text-lg'}`}>{value}</p>
     </div>
   );
 }
