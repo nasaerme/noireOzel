@@ -242,15 +242,15 @@ export default function Reports() {
             <CardContent>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={metrics.timeData}>
+                  <BarChart data={metrics.timeData}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} formatter={(value: number) => formatCurrency(value, sym)} />
                     <Legend />
-                    <Line type="monotone" dataKey="gelir" name="Gelir" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="kar" name="Kâr" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
-                  </LineChart>
+                    <Bar dataKey="gelir" name="Gelir" fill="hsl(var(--chart-2))" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="kar" name="Kâr" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
