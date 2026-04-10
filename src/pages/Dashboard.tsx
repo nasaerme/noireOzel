@@ -18,31 +18,37 @@ export default function Dashboard() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const metrics = useMemo(() => {
-    let todayRev = 0, todayProfit = 0, todayOrders = 0;
-    let weekRev = 0, weekProfit = 0;
-    let monthRev = 0, monthProfit = 0, monthOrders = 0;
+    let todayRev = 0, todayOrderProfit = 0, todayOrders = 0;
+    let weekRev = 0, weekOrderProfit = 0;
+    let monthRev = 0, monthOrderProfit = 0, monthOrders = 0;
 
     orders.forEach(o => {
       const calc = calculateOrder(o);
       const d = new Date(o.orderDate);
       if (o.orderDate.startsWith(todayStr)) {
         todayRev += calc.taxableAmount;
-        todayProfit += calc.netProfit;
+        todayOrderProfit += calc.netProfit;
         todayOrders++;
       }
       if (d >= weekAgo) {
         weekRev += calc.taxableAmount;
-        weekProfit += calc.netProfit;
+        weekOrderProfit += calc.netProfit;
       }
       if (d >= monthStart) {
         monthRev += calc.taxableAmount;
-        monthProfit += calc.netProfit;
+        monthOrderProfit += calc.netProfit;
         monthOrders++;
       }
     });
 
+    const todayExpenses = expenses.filter(e => e.date.startsWith(todayStr)).reduce((s, e) => s + e.amount, 0);
     const monthExpenses = expenses.filter(e => new Date(e.date) >= monthStart).reduce((s, e) => s + e.amount, 0);
+    const weekExpenses = expenses.filter(e => new Date(e.date) >= weekAgo).reduce((s, e) => s + e.amount, 0);
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+
+    const todayProfit = todayOrderProfit - todayExpenses;
+    const weekProfit = weekOrderProfit - weekExpenses;
+    const monthProfit = monthOrderProfit - monthExpenses;
 
     return { todayRev, todayProfit, todayOrders, weekRev, weekProfit, monthRev, monthProfit, monthOrders, monthExpenses, totalExpenses };
   }, [orders, expenses, todayStr, weekAgo, monthStart]);
