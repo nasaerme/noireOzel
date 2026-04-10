@@ -95,8 +95,9 @@ export default function Reports() {
     });
 
     const totalBusinessExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+    const totalOrderCosts = totalTax + totalProductCost + giftCost + shippingCost + packagingCost + totalCommission;
     const grossProfit = subtotal - totalProductCost - giftCost;
-    const netProfit = subtotal - totalTax - totalProductCost - giftCost - shippingCost - packagingCost - totalCommission - totalBusinessExpenses;
+    const netProfit = subtotal - totalOrderCosts - totalBusinessExpenses;
     const profitMargin = subtotal > 0 ? (netProfit / subtotal) * 100 : 0;
 
     // Product sales
@@ -142,7 +143,7 @@ export default function Reports() {
     return {
       totalOrders, unitsSold, subtotal, totalTax, totalProductCost,
       shippingCost, packagingCost, paymentCommission, shopifyCommission, totalCommission,
-      giftCost, totalDiscounts,
+      giftCost, totalDiscounts, totalOrderCosts,
       totalBusinessExpenses, grossProfit, netProfit, profitMargin,
       topProducts, topVariants, expBreakdown, timeData,
     };
@@ -229,8 +230,9 @@ export default function Reports() {
         <KPI label="Ödeme Komisyonu" value={formatCurrency(metrics.paymentCommission, sym)} small />
         <KPI label="Shopify Komisyonu" value={formatCurrency(metrics.shopifyCommission, sym)} small />
         <KPI label="Toplam Komisyon" value={formatCurrency(metrics.totalCommission, sym)} small />
-        <KPI label="Hediye" value={formatCurrency(metrics.giftCost, sym)} small />
+        <KPI label="Hediye Maliyeti" value={formatCurrency(metrics.giftCost, sym)} small />
         <KPI label="İndirimler" value={formatCurrency(metrics.totalDiscounts, sym)} small />
+        <KPI label="Toplam Sipariş Maliyeti" value={formatCurrency(metrics.totalOrderCosts, sym)} small />
         <KPI label="Diğer İşletme Giderleri" value={formatCurrency(metrics.totalBusinessExpenses, sym)} small />
       </div>
 
