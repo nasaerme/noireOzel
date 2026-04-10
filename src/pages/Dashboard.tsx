@@ -49,8 +49,9 @@ export default function Dashboard() {
     const todayProfit = todayOrderProfit - todayExpenses;
     const weekProfit = weekOrderProfit - weekExpenses;
     const monthProfit = monthOrderProfit - monthExpenses;
+    const monthTotalCost = monthRev - monthProfit;
 
-    return { todayRev, todayProfit, todayOrders, weekRev, weekProfit, monthRev, monthProfit, monthOrders, monthExpenses, totalExpenses };
+    return { todayRev, todayProfit, todayOrders, weekRev, weekProfit, monthRev, monthProfit, monthOrders, monthExpenses, monthTotalCost, totalExpenses };
   }, [orders, expenses, todayStr, weekAgo, monthStart]);
 
   const lowStockVariants = useMemo(() =>
@@ -113,7 +114,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard title="Gelir" value={formatCurrency(metrics.monthRev, sym)} icon={<ArrowUpRight className="h-4 w-4" />} />
             <MetricCard title="Net Kâr" value={formatCurrency(metrics.monthProfit, sym)} isNegative={metrics.monthProfit < 0} />
-            <MetricCard title="Gider" value={formatCurrency(metrics.monthExpenses, sym)} icon={<ReceiptIcon className="h-4 w-4" />} />
+            <MetricCard title="Toplam Gider" value={formatCurrency(metrics.monthTotalCost, sym)} icon={<ReceiptIcon className="h-4 w-4" />} />
             <MetricCard title="Sipariş" value={metrics.monthOrders.toString()} icon={<ShoppingCart className="h-4 w-4" />} />
           </div>
         </div>

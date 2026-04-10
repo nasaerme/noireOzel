@@ -231,7 +231,7 @@ export default function Reports() {
         <KPI label="Toplam Komisyon" value={formatCurrency(metrics.totalCommission, sym)} small />
         <KPI label="Hediye" value={formatCurrency(metrics.giftCost, sym)} small />
         <KPI label="İndirimler" value={formatCurrency(metrics.totalDiscounts, sym)} small />
-        <KPI label="İşletme Gideri" value={formatCurrency(metrics.totalBusinessExpenses, sym)} small />
+        <KPI label="Diğer İşletme Giderleri" value={formatCurrency(metrics.totalBusinessExpenses, sym)} small />
       </div>
 
       {/* Charts */}
