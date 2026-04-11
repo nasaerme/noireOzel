@@ -102,25 +102,39 @@ export default function Reports() {
     const profitMargin = subtotal > 0 ? (netProfit / subtotal) * 100 : 0;
 
     // Product sales
-    const productSales: Record<string, number> = {};
-    const variantSales: Record<string, number> = {};
+    const productSales: Record<string, { satis: number; hediye: number }> = {};
+    const variantSales: Record<string, { satis: number; hediye: number }> = {};
     filteredOrders.forEach(o => o.items.forEach(item => {
-      if (!item.isGift) {
-        productSales[item.productId] = (productSales[item.productId] || 0) + item.quantity;
-        variantSales[item.variantId] = (variantSales[item.variantId] || 0) + item.quantity;
+      if (!productSales[item.productId]) productSales[item.productId] = { satis: 0, hediye: 0 };
+      if (!variantSales[item.variantId]) variantSales[item.variantId] = { satis: 0, hediye: 0 };
+      
+      if (item.isGift) {
+        productSales[item.productId].hediye += item.quantity;
+        variantSales[item.variantId].hediye += item.quantity;
+      } else {
+        productSales[item.productId].satis += item.quantity;
+        variantSales[item.variantId].satis += item.quantity;
       }
     }));
 
-    const topProducts = Object.entries(productSales).sort(([, a], [, b]) => b - a).slice(0, 5).map(([id, qty]) => ({
-      name: products.find(p => p.id === id)?.name || id,
-      adet: qty,
-    }));
+    const topProducts = Object.entries(productSales)
+      .sort(([, a], [, b]) => (b.satis + b.hediye) - (a.satis + a.hediye))
+      .slice(0, 5)
+      .map(([id, qty]) => ({
+        name: products.find(p => p.id === id)?.name || id,
+        satis: qty.satis,
+        hediye: qty.hediye,
+        toplam: qty.satis + qty.hediye,
+      }));
 
-    const topVariants = Object.entries(variantSales).sort(([, a], [, b]) => b - a).slice(0, 5).map(([id, qty]) => {
-      const v = variants.find(x => x.id === id);
-      const p = products.find(x => x.id === v?.productId);
-      return { name: `${p?.name} ${v?.name}`, adet: qty };
-    });
+    const topVariants = Object.entries(variantSales)
+      .sort(([, a], [, b]) => (b.satis + b.hediye) - (a.satis + a.hediye))
+      .slice(0, 5)
+      .map(([id, qty]) => {
+        const v = variants.find(x => x.id === id);
+        const p = products.find(x => x.id === v?.productId);
+        return { name: `${p?.name} ${v?.name}`, satis: qty.satis, hediye: qty.hediye, toplam: qty.satis + qty.hediye };
+      });
 
     // Expense breakdown
     const expBreakdown = settings.expenseCategories.map(cat => ({
@@ -284,7 +298,7 @@ export default function Reports() {
 
         {metrics.topProducts.length > 0 && (
           <Card>
-            <CardHeader><CardTitle className="text-base">En Çok Satan Ürünler</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">En Çok Çıkan Ürünler</CardTitle></CardHeader>
             <CardContent>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -293,7 +307,9 @@ export default function Reports() {
                     <XAxis type="number" tick={{ fontSize: 10 }} />
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={120} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} />
-                    <Bar dataKey="adet" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
+                    <Legend />
+                    <Bar dataKey="satis" name="Satın Alınan" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="hediye" name="Hediye Giden" stackId="a" fill="hsl(var(--chart-4))" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

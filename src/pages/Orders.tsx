@@ -20,8 +20,9 @@ import {
 export default function Orders() {
   const { orders, deleteOrder, deleteOrders, settings, getProduct, getVariant } = useApp();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [payFilter, setPayFilter] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [sortBy, setSortBy] = useState("date-desc");
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -30,10 +31,23 @@ export default function Orders() {
 
   const filtered = orders.filter(o => {
     if (search && !o.orderNumber.toLowerCase().includes(search.toLowerCase())) return false;
-    if (statusFilter !== "all" && o.orderStatus !== statusFilter) return false;
-    if (payFilter !== "all" && o.paymentStatus !== payFilter) return false;
+    if (startDate && new Date(o.orderDate) < new Date(startDate)) return false;
+    if (endDate && new Date(o.orderDate) > new Date(endDate + 'T23:59:59')) return false;
     return true;
-  }).sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+  }).sort((a, b) => {
+    if (sortBy === "date-desc") return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
+    if (sortBy === "date-asc") return new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime();
+    
+    const calcA = calculateOrder(a);
+    const calcB = calculateOrder(b);
+    
+    if (sortBy === "profit-desc") return calcB.netProfit - calcA.netProfit;
+    if (sortBy === "profit-asc") return calcA.netProfit - calcB.netProfit;
+    if (sortBy === "amount-desc") return calcB.taxableAmount - calcA.taxableAmount;
+    if (sortBy === "amount-asc") return calcA.taxableAmount - calcB.taxableAmount;
+    
+    return 0;
+  });
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -82,18 +96,19 @@ export default function Orders() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Sipariş ara..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Durum" /></SelectTrigger>
+        <div className="flex gap-2">
+          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[140px]" title="Başlangıç Tarihi" />
+          <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[140px]" title="Bitiş Tarihi" />
+        </div>
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Sıralama" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tüm Durumlar</SelectItem>
-            {Object.entries(orderStatusLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={payFilter} onValueChange={setPayFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Ödeme" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tüm Ödemeler</SelectItem>
-            {Object.entries(paymentStatusLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+            <SelectItem value="date-desc">Tarih (En Yeni)</SelectItem>
+            <SelectItem value="date-asc">Tarih (En Eski)</SelectItem>
+            <SelectItem value="profit-desc">Net Kâr (En Yüksek)</SelectItem>
+            <SelectItem value="profit-asc">Net Kâr (En Düşük)</SelectItem>
+            <SelectItem value="amount-desc">Sipariş Tutarı (En Yüksek)</SelectItem>
+            <SelectItem value="amount-asc">Sipariş Tutarı (En Düşük)</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -109,8 +124,6 @@ export default function Orders() {
                 <th className="text-left p-3 font-medium text-muted-foreground">Sipariş No</th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Tarih</th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Kalem</th>
-                <th className="text-left p-3 font-medium text-muted-foreground">Durum</th>
-                <th className="text-left p-3 font-medium text-muted-foreground">Ödeme</th>
                 <th className="text-right p-3 font-medium text-muted-foreground">Gelir</th>
                 <th className="text-right p-3 font-medium text-muted-foreground">Kâr</th>
                 <th className="text-right p-3 font-medium text-muted-foreground">İşlem</th>
@@ -125,8 +138,6 @@ export default function Orders() {
                     <td className="p-3 font-medium">{o.orderNumber}</td>
                     <td className="p-3 text-muted-foreground">{formatDate(o.orderDate)}</td>
                     <td className="p-3">{o.items.length}</td>
-                    <td className="p-3"><Badge variant="secondary" className={`text-[10px] ${orderStatusColors[o.orderStatus]}`}>{orderStatusLabels[o.orderStatus]}</Badge></td>
-                    <td className="p-3"><Badge variant="secondary" className={`text-[10px] ${paymentStatusColors[o.paymentStatus]}`}>{paymentStatusLabels[o.paymentStatus]}</Badge></td>
                     <td className="p-3 text-right font-medium">{formatCurrency(calc.taxableAmount, sym)}</td>
                     <td className={`p-3 text-right font-medium ${calc.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>{formatCurrency(calc.netProfit, sym)}</td>
                     <td className="p-3 text-right">
