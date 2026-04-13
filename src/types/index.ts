@@ -47,8 +47,10 @@ export interface Order {
   extraExpense: number;
   notes: string;
   orderDate: string;
-  paymentStatus: 'beklemede' | 'odendi' | 'iptal';
-  orderStatus: 'yeni' | 'hazirlaniyor' | 'kargoda' | 'teslim_edildi' | 'iptal';
+  paymentStatus?: string;
+  orderStatus?: string;
+  city: string;
+  district: string;
   createdAt: string;
 }
 

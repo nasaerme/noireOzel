@@ -66,6 +66,8 @@ CREATE TABLE orders (
   order_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   payment_status TEXT NOT NULL DEFAULT 'beklemede', -- 'beklemede', 'odendi', 'iptal'
   order_status TEXT NOT NULL DEFAULT 'yeni', -- 'yeni', 'hazirlaniyor', 'kargoda', 'teslim_edildi', 'iptal'
+  city TEXT,
+  district TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

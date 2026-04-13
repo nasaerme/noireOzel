@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Gift } from "lucide-react";
 import { toast } from "sonner";
+import citiesData from "@/data/cities.json";
 
 export default function OrderCreate({ onClose }: { onClose: () => void }) {
   const { products, variants, settings, addOrder, getVariantsForProduct } = useApp();
@@ -28,8 +29,11 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
   const [extraExpense, setExtraExpense] = useState(0);
   const [notes, setNotes] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
-  const [paymentStatus] = useState<'beklemede' | 'odendi'>('beklemede');
-  const [orderStatus] = useState<'yeni' | 'hazirlaniyor' | 'kargoda' | 'teslim_edildi'>('yeni');
+  const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
+  
+  const selectedCityData = citiesData.find(c => c.name === city);
+  const districtOptions = selectedCityData ? selectedCityData.districts : [];
 
   const addItem = (isGift = false) => {
     setItems([...items, {
@@ -76,8 +80,8 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
     paymentCommissionRate, paymentCommissionFixed,
     shopifyCommissionRate, shopifyCommissionFixed,
     discountAmount, discountRate,
-    extraExpense, notes, orderDate, paymentStatus, orderStatus,
-  }), [items, taxRate, shippingCost, packagingCost, paymentCommissionRate, paymentCommissionFixed, shopifyCommissionRate, shopifyCommissionFixed, discountAmount, discountRate, extraExpense, notes, orderDate, paymentStatus, orderStatus]);
+    extraExpense, notes, orderDate, city, district,
+  }), [items, taxRate, shippingCost, packagingCost, paymentCommissionRate, paymentCommissionFixed, shopifyCommissionRate, shopifyCommissionFixed, discountAmount, discountRate, extraExpense, notes, orderDate, city, district]);
 
   const calc = calculateOrder(orderForCalc);
 
@@ -120,7 +124,7 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
       shopifyCommissionRate, shopifyCommissionFixed,
       discountAmount, discountRate,
       extraExpense, notes, orderDate: new Date(orderDate).toISOString(),
-      paymentStatus, orderStatus,
+      city, district
     });
 
     toast.success("Sipariş oluşturuldu");
@@ -177,8 +181,26 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <div>
-          <div><Label className="text-xs">Sipariş Tarihi</Label><Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="text-xs w-full sm:w-1/3" /></div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div><Label className="text-xs">Sipariş Tarihi</Label><Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="text-xs" /></div>
+          <div>
+            <Label className="text-xs">İl</Label>
+            <Select value={city} onValueChange={v => { setCity(v); setDistrict(""); }}>
+              <SelectTrigger className="text-xs"><SelectValue placeholder="İl Seç" /></SelectTrigger>
+              <SelectContent>
+                {citiesData.map(c => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">İlçe</Label>
+            <Select value={district} onValueChange={v => setDistrict(v)} disabled={!city}>
+              <SelectTrigger className="text-xs"><SelectValue placeholder="İlçe Seç" /></SelectTrigger>
+              <SelectContent>
+                {districtOptions.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Tax & Discounts */}

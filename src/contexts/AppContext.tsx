@@ -103,6 +103,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             shopifyCommissionFixed: o.shopify_commission_fixed, discountAmount: o.discount_amount,
             discountRate: o.discount_rate, extraExpense: o.extra_expense, notes: o.notes || '',
             orderDate: o.order_date, paymentStatus: o.payment_status, orderStatus: o.order_status,
+            city: o.city || '', district: o.district || '',
             createdAt: o.created_at,
             items: (o.order_items || []).map((i: any) => ({
               id: i.id, productId: i.product_id, variantId: i.variant_id, quantity: i.quantity,
@@ -211,7 +212,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       payment_commission_fixed: o.paymentCommissionFixed, shopify_commission_rate: o.shopifyCommissionRate,
       shopify_commission_fixed: o.shopifyCommissionFixed, discount_amount: o.discountAmount,
       discount_rate: o.discountRate, extra_expense: o.extraExpense, notes: o.notes,
-      order_date: o.orderDate, payment_status: o.paymentStatus, order_status: o.orderStatus,
+      order_date: o.orderDate, payment_status: o.paymentStatus || 'beklemede', order_status: o.orderStatus || 'yeni',
+      city: o.city, district: o.district,
       created_at: createdAt
     }).then(({error}) => {
       if (error) { toast.error("Sipariş Veritabanına Kaydedilemedi!"); return; }
@@ -239,8 +241,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateOrder = useCallback((o: Order) => {
     setOrders(prev => prev.map(x => x.id === o.id ? o : x));
     supabase.from('orders').update({
-       tax_rate: o.taxRate, shipping_cost: o.shippingCost, payment_status: o.paymentStatus,
-       order_status: o.orderStatus, notes: o.notes
+       tax_rate: o.taxRate, shipping_cost: o.shippingCost, payment_status: o.paymentStatus || 'beklemede',
+       order_status: o.orderStatus || 'yeni', notes: o.notes, city: o.city, district: o.district
     }).eq('id', o.id).then();
   }, []);
 

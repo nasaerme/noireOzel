@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
+import TurkeyMap from 'react-turkey-map';
+import citiesData from "@/data/cities.json";
 
 type Period = 'today' | 'yesterday' | 'week' | 'month' | 'last_month' | 'specific_month' | 'all_time' | 'custom';
 
@@ -18,6 +20,7 @@ export default function Reports() {
   const [endDate, setEndDate] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [cityLimit, setCityLimit] = useState<number>(10);
 
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -102,11 +105,11 @@ export default function Reports() {
     const profitMargin = subtotal > 0 ? (netProfit / subtotal) * 100 : 0;
 
     // Product sales
-    const productSales: Record<string, { satis: number; hediye: number }> = {};
-    const variantSales: Record<string, { satis: number; hediye: number }> = {};
+    const productSales: Record<string, { satis: number; hediye: number; revenue: number }> = {};
+    const variantSales: Record<string, { satis: number; hediye: number; revenue: number }> = {};
     filteredOrders.forEach(o => o.items.forEach(item => {
-      if (!productSales[item.productId]) productSales[item.productId] = { satis: 0, hediye: 0 };
-      if (!variantSales[item.variantId]) variantSales[item.variantId] = { satis: 0, hediye: 0 };
+      if (!productSales[item.productId]) productSales[item.productId] = { satis: 0, hediye: 0, revenue: 0 };
+      if (!variantSales[item.variantId]) variantSales[item.variantId] = { satis: 0, hediye: 0, revenue: 0 };
       
       if (item.isGift) {
         productSales[item.productId].hediye += item.quantity;
@@ -114,26 +117,41 @@ export default function Reports() {
       } else {
         productSales[item.productId].satis += item.quantity;
         variantSales[item.variantId].satis += item.quantity;
+        productSales[item.productId].revenue += item.unitSalePrice * item.quantity;
+        variantSales[item.variantId].revenue += item.unitSalePrice * item.quantity;
       }
     }));
 
     const topProducts = Object.entries(productSales)
       .sort(([, a], [, b]) => (b.satis + b.hediye) - (a.satis + a.hediye))
-      .slice(0, 5)
-      .map(([id, qty]) => ({
-        name: products.find(p => p.id === id)?.name || id,
-        satis: qty.satis,
-        hediye: qty.hediye,
-        toplam: qty.satis + qty.hediye,
-      }));
+      .slice(0, 10)
+      .map(([id, stats]) => {
+        const name = products.find(p => p.id === id)?.name || id;
+        return {
+          name,
+          label: `${name} (${formatCurrency(stats.revenue, settings.currencySymbol)})`,
+          satis: stats.satis,
+          hediye: stats.hediye,
+          toplam: stats.satis + stats.hediye,
+          gelir: stats.revenue,
+        };
+      });
 
     const topVariants = Object.entries(variantSales)
       .sort(([, a], [, b]) => (b.satis + b.hediye) - (a.satis + a.hediye))
-      .slice(0, 5)
-      .map(([id, qty]) => {
+      .slice(0, 10)
+      .map(([id, stats]) => {
         const v = variants.find(x => x.id === id);
         const p = products.find(x => x.id === v?.productId);
-        return { name: `${p?.name} ${v?.name}`, satis: qty.satis, hediye: qty.hediye, toplam: qty.satis + qty.hediye };
+        const name = `${p?.name} ${v?.name}`;
+        return { 
+          name,
+          label: `${name} (${formatCurrency(stats.revenue, settings.currencySymbol)})`,
+          satis: stats.satis, 
+          hediye: stats.hediye, 
+          toplam: stats.satis + stats.hediye,
+          gelir: stats.revenue,
+        };
       });
 
     // Expense breakdown
@@ -145,6 +163,11 @@ export default function Reports() {
 
     // Revenue over time
     const revenueOverTime: Record<string, { date: string; gelir: number; kar: number; siparis: number }> = {};
+    const citySales: Record<string, { siparis: number, gelir: number, plaka: string }> = {};
+    citiesData.forEach((c, idx) => {
+      citySales[c.name] = { siparis: 0, gelir: 0, plaka: String(idx + 1).padStart(2, '0') };
+    });
+
     filteredOrders.forEach(o => {
       const key = o.orderDate.split('T')[0];
       if (!revenueOverTime[key]) revenueOverTime[key] = { date: key, gelir: 0, kar: 0, siparis: 0 };
@@ -152,15 +175,44 @@ export default function Reports() {
       revenueOverTime[key].gelir += calc.taxableAmount;
       revenueOverTime[key].kar += calc.netProfit;
       revenueOverTime[key].siparis += 1;
+
+      if (o.city && citySales[o.city]) {
+        citySales[o.city].siparis += 1;
+        citySales[o.city].gelir += calc.taxableAmount;
+      }
     });
     const timeData = Object.values(revenueOverTime).sort((a, b) => a.date.localeCompare(b.date));
+
+    const mapColors: Record<string, string> = {};
+    const mapTooltips: Record<string, string> = {};
+    let maxSiparis = 0;
+    Object.values(citySales).forEach(c => { if(c.siparis > maxSiparis) maxSiparis = c.siparis; });
+
+    Object.entries(citySales).forEach(([isim, st]) => {
+      if (st.siparis > 0) {
+        const intensity = maxSiparis > 0 ? st.siparis / maxSiparis : 0;
+        // base color: primary blue (hsl 221.2 83.2% 53.3% -> roughly rgba(37, 99, 235))
+        mapColors[st.plaka] = `rgba(37, 99, 235, ${0.15 + (0.85 * Math.pow(intensity, 0.6))})`;
+        mapTooltips[st.plaka] = `${isim} | ${st.siparis} Sipariş (${formatCurrency(st.gelir, settings.currencySymbol)})`;
+      }
+    });
+
+    const topCities = Object.entries(citySales)
+      .filter(([, st]) => st.siparis > 0)
+      .sort(([, a], [, b]) => b.siparis - a.siparis)
+      .map(([isim, st]) => ({
+        name: isim,
+        label: `${isim} (${st.siparis})`,
+        siparis: st.siparis,
+        gelir: st.gelir,
+      }));
 
     return {
       totalOrders, unitsSold, subtotal, totalTax, totalProductCost,
       shippingCost, packagingCost, paymentCommission, shopifyCommission, totalCommission,
       giftCost, totalDiscounts, totalOrderCosts, totalExpensesAll,
       totalBusinessExpenses, grossProfit, netProfit, profitMargin,
-      topProducts, topVariants, expBreakdown, timeData,
+      topProducts, topVariants, expBreakdown, timeData, mapColors, mapTooltips, topCities
     };
   }, [orders, expenses, dateRange, products, variants, settings]);
 
@@ -275,7 +327,7 @@ export default function Reports() {
           <Card>
             <CardHeader><CardTitle className="text-base">Sipariş Gelir & Kâr Trendi</CardTitle></CardHeader>
             <CardContent>
-              <div className="h-[280px]">
+              <div className="h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={metrics.timeData}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -300,13 +352,16 @@ export default function Reports() {
           <Card>
             <CardHeader><CardTitle className="text-base">En Çok Çıkan Ürünler</CardTitle></CardHeader>
             <CardContent>
-              <div className="h-[280px]">
+              <div className="h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={metrics.topProducts} layout="vertical">
+                  <BarChart data={metrics.topProducts} layout="vertical" margin={{ left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis type="number" tick={{ fontSize: 10 }} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={120} />
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} />
+                    <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={180} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} 
+                      formatter={(value: number, name: string) => [`${value} Adet`, name]}
+                    />
                     <Legend />
                     <Bar dataKey="satis" name="Satın Alınan" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 0, 0, 0]} />
                     <Bar dataKey="hediye" name="Hediye Giden" stackId="a" fill="hsl(var(--chart-4))" radius={[0, 4, 4, 0]} />
@@ -355,6 +410,62 @@ export default function Reports() {
             </CardContent>
           </Card>
         )}
+
+        {/* Turkey Map */}
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base">İllere Göre Dağılım</CardTitle></CardHeader>
+          <CardContent className="flex flex-col items-center">
+            {Object.keys(metrics.mapColors).length > 0 ? (
+              <div className="w-full max-w-2xl px-4 rounded-xl [&_svg]:!h-auto [&_svg]:!max-h-[450px]">
+                <TurkeyMap 
+                  colorData={metrics.mapColors} 
+                  tooltipData={metrics.mapTooltips}
+                />
+              </div>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+                Seçilen tarih aralığında sipariş bulunamadı.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        {/* Top Cities Chart */}
+        {metrics.topCities.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base mt-2">En Çok Sipariş Alan İller</CardTitle>
+              <Select value={cityLimit.toString()} onValueChange={v => setCityLimit(parseInt(v))}>
+                <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">İlk 5</SelectItem>
+                  <SelectItem value="10">İlk 10</SelectItem>
+                  <SelectItem value="20">İlk 20</SelectItem>
+                  <SelectItem value="0">Tümü</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[400px] overflow-y-auto overflow-x-hidden pr-2">
+                <div style={{ height: Math.max(380, (cityLimit === 0 ? metrics.topCities.length : Math.min(metrics.topCities.length, cityLimit)) * 40) }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={cityLimit === 0 ? metrics.topCities : metrics.topCities.slice(0, cityLimit)} layout="vertical" margin={{ left: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis type="number" tick={{ fontSize: 10 }} />
+                      <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={80} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} 
+                        formatter={(value: number) => [`${value} Sipariş`, "Sipariş Sayısı"]}
+                      />
+                      <Legend />
+                      <Bar dataKey="siparis" name="Sipariş Sayısı" fill="hsl(var(--chart-5))" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
       </div>
     </div>
   );

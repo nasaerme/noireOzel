@@ -2,16 +2,17 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Order } from "@/types";
 import { calculateOrder } from "@/utils/calculations";
-import { formatCurrency, formatDate, orderStatusLabels, paymentStatusLabels, orderStatusColors, paymentStatusColors } from "@/utils/formatters";
+import { formatCurrency, formatDate } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Eye, Trash2, ShoppingCart } from "lucide-react";
+import { Plus, Search, Eye, Trash2, ShoppingCart, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import OrderCreate from "@/components/orders/OrderCreate";
+import OrderEdit from "@/components/orders/OrderEdit";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -25,6 +26,7 @@ export default function Orders() {
   const [sortBy, setSortBy] = useState("date-desc");
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+  const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const sym = settings.currencySymbol;
@@ -123,6 +125,8 @@ export default function Orders() {
                 </th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Sipariş No</th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Tarih</th>
+                <th className="text-left p-3 font-medium text-muted-foreground">İl</th>
+                <th className="text-left p-3 font-medium text-muted-foreground">İlçe</th>
                 <th className="text-left p-3 font-medium text-muted-foreground">Kalem</th>
                 <th className="text-right p-3 font-medium text-muted-foreground">Gelir</th>
                 <th className="text-right p-3 font-medium text-muted-foreground">Kâr</th>
@@ -137,12 +141,15 @@ export default function Orders() {
                     <td className="p-3"><Checkbox checked={selectedIds.has(o.id)} onCheckedChange={() => toggleSelect(o.id)} /></td>
                     <td className="p-3 font-medium">{o.orderNumber}</td>
                     <td className="p-3 text-muted-foreground">{formatDate(o.orderDate)}</td>
+                    <td className="p-3">{o.city || '-'}</td>
+                    <td className="p-3">{o.district || '-'}</td>
                     <td className="p-3">{o.items.length}</td>
                     <td className="p-3 text-right font-medium">{formatCurrency(calc.taxableAmount, sym)}</td>
                     <td className={`p-3 text-right font-medium ${calc.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>{formatCurrency(calc.netProfit, sym)}</td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDetailOrder(o)}><Eye className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" onClick={() => setEditOrder(o)}><Pencil className="h-3.5 w-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(o.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                       </div>
                     </td>
@@ -176,6 +183,15 @@ export default function Orders() {
         </Dialog>
       )}
 
+      {editOrder && (
+        <Dialog open={!!editOrder} onOpenChange={() => setEditOrder(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Siparişi Düzenle - {editOrder.orderNumber}</DialogTitle></DialogHeader>
+            <OrderEdit order={editOrder} onClose={() => setEditOrder(null)} />
+          </DialogContent>
+        </Dialog>
+      )}
+
       <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -200,8 +216,8 @@ function OrderDetail({ order, sym, getProduct, getVariant }: { order: Order; sym
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div><span className="text-muted-foreground">Tarih:</span> {formatDate(order.orderDate)}</div>
-        <div><span className="text-muted-foreground">Durum:</span> {orderStatusLabels[order.orderStatus]}</div>
-        <div><span className="text-muted-foreground">Ödeme:</span> {paymentStatusLabels[order.paymentStatus]}</div>
+        <div><span className="text-muted-foreground">İl:</span> {order.city || '-'}</div>
+        <div><span className="text-muted-foreground">İlçe:</span> {order.district || '-'}</div>
         <div><span className="text-muted-foreground">KDV:</span> %{order.taxRate}</div>
       </div>
 
