@@ -1,9 +1,10 @@
 import { useApp } from "@/contexts/AppContext";
 import { calculateOrder } from "@/utils/calculations";
 import { formatCurrency } from "@/utils/formatters";
-import { TrendingUp, TrendingDown, ShoppingCart, ArrowUpRight, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, ShoppingCart, ArrowUpRight, AlertTriangle, Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { orderStatusLabels, orderStatusColors, formatDate } from "@/utils/formatters";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo } from "react";
@@ -58,6 +59,44 @@ export default function Dashboard() {
     variants.filter(v => v.stock <= v.lowStockThreshold).slice(0, 8),
     [variants]
   );
+
+  const inventoryMetrics = useMemo(() => {
+    let totalStockQty = 0;
+    let totalStockCost = 0;
+    let totalExpectedValue = 0;
+
+    const productStats = products.map(p => {
+      const pVariants = variants.filter(v => v.productId === p.id);
+      let pStockQty = 0;
+      let pStockCost = 0;
+      let pExpectedValue = 0;
+
+      pVariants.forEach(v => {
+        if (v.stock > 0) {
+          pStockQty += v.stock;
+          const cost = v.costPriceOverride ?? p.costPrice;
+          const sale = v.salePriceOverride ?? p.salePrice;
+          pStockCost += (v.stock * cost);
+          pExpectedValue += (v.stock * sale);
+        }
+      });
+
+      totalStockQty += pStockQty;
+      totalStockCost += pStockCost;
+      totalExpectedValue += pExpectedValue;
+
+      return {
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        stockQty: pStockQty,
+        stockCost: pStockCost,
+        expectedValue: pExpectedValue
+      };
+    }).filter(p => p.stockQty > 0).sort((a, b) => b.stockCost - a.stockCost);
+
+    return { totalStockQty, totalStockCost, totalExpectedValue, productStats };
+  }, [products, variants]);
 
   const recentOrders = orders.slice(0, 8);
 
@@ -118,6 +157,15 @@ export default function Dashboard() {
             <MetricCard title="Sipariş" value={metrics.monthOrders.toString()} icon={<ShoppingCart className="h-4 w-4" />} />
           </div>
         </div>
+
+        <div className="space-y-2">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Mevcut Envanter</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <MetricCard title="Toplam Stok Adedi" value={inventoryMetrics.totalStockQty.toString()} icon={<Package className="h-4 w-4" />} />
+            <MetricCard title="Toplam Stok Maliyeti" value={formatCurrency(inventoryMetrics.totalStockCost, sym)} accent />
+            <MetricCard title="Beklenen Satış Geliri" value={formatCurrency(inventoryMetrics.totalExpectedValue, sym)} />
+          </div>
+        </div>
       </div>
 
       {chartData.length > 0 && (
@@ -132,12 +180,53 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" tickFormatter={v => v.slice(5)} />
                   <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} formatter={(value: number) => formatCurrency(value, sym)} />
                   <Bar dataKey="gelir" name="Gelir" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="kar" name="Kâr" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stock Cost Table */}
+      {inventoryMetrics.productStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Ürün Bazlı Stok Maliyeti</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ürün Adı</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead className="text-right">Stok Adedi</TableHead>
+                  <TableHead className="text-right">Toplam Maliyet</TableHead>
+                  <TableHead className="text-center">Çarpan</TableHead>
+                  <TableHead className="text-right">Beklenen Gelir</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {inventoryMetrics.productStats.map(p => {
+                  const mx = p.stockCost > 0 ? (p.expectedValue / p.stockCost).toFixed(1) : 0;
+                  const multiplier = p.stockCost > 0 ? `${mx}x` : '-';
+                  return (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{p.sku}</TableCell>
+                      <TableCell className="text-right">{p.stockQty}</TableCell>
+                      <TableCell className="text-right font-medium text-primary">{formatCurrency(p.stockCost, sym)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-medium">{multiplier}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">{formatCurrency(p.expectedValue, sym)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
