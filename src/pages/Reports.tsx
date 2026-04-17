@@ -21,6 +21,7 @@ export default function Reports() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [cityLimit, setCityLimit] = useState<number>(10);
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('all');
 
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -123,6 +124,13 @@ export default function Reports() {
     }));
 
     const topProducts = Object.entries(productSales)
+      .filter(([id]) => {
+        if (productCategoryFilter !== 'all') {
+          const p = products.find(prod => prod.id === id);
+          return p?.category === productCategoryFilter;
+        }
+        return true;
+      })
       .sort(([, a], [, b]) => (b.satis + b.hediye) - (a.satis + a.hediye))
       .slice(0, 10)
       .map(([id, stats]) => {
@@ -136,6 +144,8 @@ export default function Reports() {
           gelir: stats.revenue,
         };
       });
+
+    const hasProductSales = Object.keys(productSales).length > 0;
 
     const topVariants = Object.entries(variantSales)
       .sort(([, a], [, b]) => (b.satis + b.hediye) - (a.satis + a.hediye))
@@ -212,9 +222,10 @@ export default function Reports() {
       shippingCost, packagingCost, paymentCommission, shopifyCommission, totalCommission,
       giftCost, totalDiscounts, totalOrderCosts, totalExpensesAll,
       totalBusinessExpenses, grossProfit, netProfit, profitMargin,
-      topProducts, topVariants, expBreakdown, timeData, mapColors, mapTooltips, topCities
+      topProducts, topVariants, expBreakdown, timeData, mapColors, mapTooltips, topCities,
+      hasProductSales
     };
-  }, [orders, expenses, dateRange, products, variants, settings]);
+  }, [orders, expenses, dateRange, products, variants, settings, productCategoryFilter]);
 
   const pieColors = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))', '#94a3b8'];
 
@@ -348,26 +359,45 @@ export default function Reports() {
           </Card>
         )}
 
-        {metrics.topProducts.length > 0 && (
+        {metrics.hasProductSales && (
           <Card>
-            <CardHeader><CardTitle className="text-base">En Çok Çıkan Ürünler</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base mt-2">En Çok Çıkan Ürünler</CardTitle>
+              <Select value={productCategoryFilter} onValueChange={setProductCategoryFilter}>
+                <SelectTrigger className="w-[140px] h-8 text-xs">
+                  <SelectValue placeholder="Kategori Seç" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tüm Kategoriler</SelectItem>
+                  {settings.categories?.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardHeader>
             <CardContent>
-              <div className="h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={metrics.topProducts} layout="vertical" margin={{ left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis type="number" tick={{ fontSize: 10 }} />
-                    <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={180} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} 
-                      formatter={(value: number, name: string) => [`${value} Adet`, name]}
-                    />
-                    <Legend />
-                    <Bar dataKey="satis" name="Satın Alınan" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="hediye" name="Hediye Giden" stackId="a" fill="hsl(var(--chart-4))" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {metrics.topProducts.length > 0 ? (
+                <div className="h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.topProducts} layout="vertical" margin={{ left: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis type="number" tick={{ fontSize: 10 }} />
+                      <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={180} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} 
+                        formatter={(value: number, name: string) => [`${value} Adet`, name]}
+                      />
+                      <Legend />
+                      <Bar dataKey="satis" name="Satın Alınan" stackId="a" fill="hsl(var(--chart-1))" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="hediye" name="Hediye Giden" stackId="a" fill="hsl(var(--chart-4))" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-[400px] flex items-center justify-center text-muted-foreground text-sm">
+                  Bu kategoride satış bulunmamaktadır.
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
