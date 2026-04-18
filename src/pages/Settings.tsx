@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState({ ...settings });
   const [newCategory, setNewCategory] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
+  const [newCompetitor, setNewCompetitor] = useState("");
 
   const save = () => {
     updateSettings(form);
@@ -31,6 +32,17 @@ export default function SettingsPage() {
 
   const removeCategory = (c: string) => {
     setForm({ ...form, categories: form.categories.filter(x => x !== c) });
+  };
+
+  const addCompetitor = () => {
+    if (newCompetitor && !(form.competitors || []).includes(newCompetitor)) {
+      setForm({ ...form, competitors: [...(form.competitors || []), newCompetitor] });
+      setNewCompetitor("");
+    }
+  };
+
+  const removeCompetitor = (c: string) => {
+    setForm({ ...form, competitors: (form.competitors || []).filter(x => x !== c) });
   };
 
   const addExpenseCategory = () => {
@@ -225,6 +237,28 @@ export default function SettingsPage() {
                     <Badge key={c.id} variant="outline" className="gap-2 py-1.5 px-3 border-transparent group cursor-default" style={{ backgroundColor: c.color + '20', color: c.color }}>
                       <span className="font-medium text-sm drop-shadow-sm">{c.name}</span>
                       <button onClick={() => removeExpenseCategory(c.id)} className="opacity-60 group-hover:opacity-100 transition-opacity"><X className="h-3.5 w-3.5" /></button>
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="h-fit border-border/60 shadow-sm lg:col-span-2 xl:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg">Takip Edilen Rakipler</CardTitle>
+                <CardDescription>Reklam takiplerinde hızlıca seçebilmek için rakip listesi.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex gap-2">
+                  <Input placeholder="Rakip firma adı..." value={newCompetitor} onChange={e => setNewCompetitor(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCompetitor()} />
+                  <Button variant="secondary" onClick={addCompetitor} className="shrink-0"><Plus className="h-4 w-4" /></Button>
+                </div>
+                <div className="flex flex-wrap gap-2 min-h-[60px] p-4 bg-secondary/10 rounded-xl border border-border/30">
+                  {(!form.competitors || form.competitors.length === 0) && <span className="text-sm text-muted-foreground opacity-70 w-full text-center py-2">Henüz rakip eklenmedi.</span>}
+                  {form.competitors?.map(c => (
+                    <Badge key={c} variant="outline" className="gap-2 py-1.5 px-3 bg-background hover:bg-destructive/10 transition-colors group cursor-default shadow-sm border-border">
+                      <span className="font-normal text-sm">{c}</span>
+                      <button onClick={() => removeCompetitor(c)} className="text-muted-foreground group-hover:text-destructive transition-colors"><X className="h-3.5 w-3.5" /></button>
                     </Badge>
                   ))}
                 </div>

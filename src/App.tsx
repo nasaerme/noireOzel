@@ -11,6 +11,7 @@ import Orders from "./pages/Orders";
 import Expenses from "./pages/Expenses";
 import Reports from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
+import CompetitorAds from "./pages/CompetitorAds";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/giderler" element={<Expenses />} />
               <Route path="/raporlar" element={<Reports />} />
               <Route path="/ayarlar" element={<SettingsPage />} />
+              <Route path="/reklam-takip" element={<CompetitorAds />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AppLayout>

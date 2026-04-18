@@ -82,6 +82,7 @@ export interface Settings {
   businessPhone: string;
   businessEmail: string;
   categories: string[];
+  competitors: string[];
   expenseCategories: ExpenseCategory[];
   defaultPaymentCommissionRate: number;
   defaultPaymentCommissionFixed: number;
@@ -106,4 +107,29 @@ export interface OrderCalculation {
   grossProfit: number;
   netProfit: number;
   profitMargin: number;
+}
+
+export interface CompetitorAd {
+  id: string;
+  productName: string;
+  category: string;
+  competitors: string;
+  adCount: number;
+  adType: string;
+  inStock: boolean;
+  notes: string;
+  createdAt: string;
+}
+
+export interface CompetitorProfile {
+  id: string;
+  competitorName: string;
+  creativeCount: number;
+  priceRange: string;
+  strategy: string;
+  productsNote: string;
+  adLibraryUrl?: string;
+  websiteUrl?: string;
+  instagramUrl?: string;
+  createdAt: string;
 }

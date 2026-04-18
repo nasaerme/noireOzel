@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
-import { Product, ProductVariant, Order, Expense, Settings } from '@/types';
+import { Product, ProductVariant, Order, Expense, Settings, CompetitorAd, CompetitorProfile } from '@/types';
 import { generateId, generateOrderNumber } from '@/utils/formatters';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -29,6 +29,16 @@ interface AppContextType {
   getProduct: (id: string) => Product | undefined;
   getVariant: (id: string) => ProductVariant | undefined;
   getVariantsForProduct: (productId: string) => ProductVariant[];
+  competitorAds: CompetitorAd[];
+  addCompetitorAd: (a: Omit<CompetitorAd, 'id' | 'createdAt'>) => void;
+  updateCompetitorAd: (a: CompetitorAd) => void;
+  deleteCompetitorAd: (id: string) => void;
+  deleteCompetitorAds: (ids: string[]) => void;
+  competitorProfiles: CompetitorProfile[];
+  addCompetitorProfile: (p: Omit<CompetitorProfile, 'id' | 'createdAt'>) => void;
+  updateCompetitorProfile: (p: CompetitorProfile) => void;
+  deleteCompetitorProfile: (id: string) => void;
+  deleteCompetitorProfiles: (ids: string[]) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -44,8 +54,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [competitorAds, setCompetitorAds] = useState<CompetitorAd[]>([]);
+  const [competitorProfiles, setCompetitorProfiles] = useState<CompetitorProfile[]>([]);
   const [settings, setSettings] = useState<Settings>({
-    language: 'tr', currency: 'TRY', currencySymbol: '₺', defaultTaxRate: 20, businessName: '', businessAddress: '', businessPhone: '', businessEmail: '', categories: [], expenseCategories: [],
+    language: 'tr', currency: 'TRY', currencySymbol: '₺', defaultTaxRate: 20, businessName: '', businessAddress: '', businessPhone: '', businessEmail: '', categories: [], competitors: [], expenseCategories: [],
     defaultPaymentCommissionRate: 2.49, defaultPaymentCommissionFixed: 0.25, defaultShopifyCommissionRate: 2.0, defaultShopifyCommissionFixed: 0
   });
 
@@ -63,7 +75,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             language: setD.language, currency: setD.currency, currencySymbol: setD.currency_symbol,
             defaultTaxRate: setD.default_tax_rate, businessName: setD.business_name || '',
             businessAddress: setD.business_address || '', businessPhone: setD.business_phone || '',
-            businessEmail: setD.business_email || '', categories: setD.categories || [], expenseCategories: loadedExpCategories,
+            businessEmail: setD.business_email || '', categories: setD.categories || [], competitors: setD.competitors || [], expenseCategories: loadedExpCategories,
             defaultPaymentCommissionRate: setD.default_payment_commission_rate ?? 2.49,
             defaultPaymentCommissionFixed: setD.default_payment_commission_fixed ?? 0.25,
             defaultShopifyCommissionRate: setD.default_shopify_commission_rate ?? 2.0,
@@ -91,6 +103,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (eD) setExpenses(eD.map(e => ({
           id: e.id, date: e.date, categoryId: e.category_id || '', description: e.description,
           amount: e.amount, recurring: e.recurring, frequency: e.frequency, notes: e.notes || '', createdAt: e.created_at
+        })));
+
+        // Fetch Competitor Ads
+        const { data: caD } = await supabase.from('competitor_ads').select('*').order('created_at', { ascending: false });
+        if (caD) setCompetitorAds(caD.map(ca => ({
+          id: ca.id, productName: ca.product_name, category: ca.category, competitors: ca.competitors,
+          adCount: ca.ad_count, adType: ca.ad_type, inStock: ca.in_stock || false, notes: ca.notes || '', createdAt: ca.created_at
+        })));
+
+        // Fetch Competitor Profiles
+        const { data: cpD } = await supabase.from('competitor_profiles').select('*').order('created_at', { ascending: false });
+        if (cpD) setCompetitorProfiles(cpD.map(cp => ({
+          id: cp.id, competitorName: cp.competitor_name, creativeCount: cp.creative_count, priceRange: cp.price_range || '',
+          strategy: cp.strategy || '', productsNote: cp.products_note || '', 
+          adLibraryUrl: cp.ad_library_url || '', websiteUrl: cp.website_url || '', instagramUrl: cp.instagram_url || '',
+          createdAt: cp.created_at
         })));
 
         // Fetch Orders + Items
@@ -311,6 +339,83 @@ export function AppProvider({ children }: { children: ReactNode }) {
     supabase.from('expenses').delete().in('id', ids).then();
   }, []);
 
+  // --- COMPETITOR ADS ---
+  const addCompetitorAd = useCallback((a: Omit<CompetitorAd, 'id' | 'createdAt'>) => {
+    const id = generateId();
+    const createdAt = new Date().toISOString();
+    const newAd: CompetitorAd = { ...a, id, createdAt };
+    setCompetitorAds(prev => [newAd, ...prev]);
+    
+    supabase.from('competitor_ads').insert({
+      id, product_name: a.productName, category: a.category, competitors: a.competitors,
+      ad_count: a.adCount, ad_type: a.adType, in_stock: a.inStock, notes: a.notes, created_at: createdAt
+    }).then(({ error }) => {
+      if (error) {
+         console.error("Rakip reklamı ekleme hatası:", error);
+         toast.error("Reklam kaydedilemedi: " + error.message);
+      }
+    });
+  }, []);
+
+  const updateCompetitorAd = useCallback((a: CompetitorAd) => {
+    setCompetitorAds(prev => prev.map(x => x.id === a.id ? a : x));
+    supabase.from('competitor_ads').update({
+      product_name: a.productName, category: a.category, competitors: a.competitors,
+      ad_count: a.adCount, ad_type: a.adType, in_stock: a.inStock, notes: a.notes
+    }).eq('id', a.id).then();
+  }, []);
+
+  const deleteCompetitorAd = useCallback((id: string) => {
+    setCompetitorAds(prev => prev.filter(x => x.id !== id));
+    supabase.from('competitor_ads').delete().eq('id', id).then();
+  }, []);
+
+  const deleteCompetitorAds = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setCompetitorAds(prev => prev.filter(x => !idSet.has(x.id)));
+    supabase.from('competitor_ads').delete().in('id', ids).then();
+  }, []);
+
+  // --- COMPETITOR PROFILES ---
+  const addCompetitorProfile = useCallback((p: Omit<CompetitorProfile, 'id' | 'createdAt'>) => {
+    const id = generateId();
+    const createdAt = new Date().toISOString();
+    const newP: CompetitorProfile = { ...p, id, createdAt };
+    setCompetitorProfiles(prev => [newP, ...prev]);
+    
+    supabase.from('competitor_profiles').insert({
+      id, competitor_name: p.competitorName, creative_count: p.creativeCount,
+      price_range: p.priceRange, strategy: p.strategy, products_note: p.productsNote,
+      ad_library_url: p.adLibraryUrl, website_url: p.websiteUrl, instagram_url: p.instagramUrl,
+      created_at: createdAt
+    }).then(({ error }) => {
+      if (error) {
+         console.error("Rakip profili ekleme hatası:", error);
+         toast.error("Profil kaydedilemedi: " + error.message);
+      }
+    });
+  }, []);
+
+  const updateCompetitorProfile = useCallback((p: CompetitorProfile) => {
+    setCompetitorProfiles(prev => prev.map(x => x.id === p.id ? p : x));
+    supabase.from('competitor_profiles').update({
+      competitor_name: p.competitorName, creative_count: p.creativeCount,
+      price_range: p.priceRange, strategy: p.strategy, products_note: p.productsNote,
+      ad_library_url: p.adLibraryUrl, website_url: p.websiteUrl, instagram_url: p.instagramUrl
+    }).eq('id', p.id).then();
+  }, []);
+
+  const deleteCompetitorProfile = useCallback((id: string) => {
+    setCompetitorProfiles(prev => prev.filter(x => x.id !== id));
+    supabase.from('competitor_profiles').delete().eq('id', id).then();
+  }, []);
+
+  const deleteCompetitorProfiles = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setCompetitorProfiles(prev => prev.filter(x => !idSet.has(x.id)));
+    supabase.from('competitor_profiles').delete().in('id', ids).then();
+  }, []);
+
   // --- SETTINGS ---
   const updateSettings = useCallback((s: Partial<Settings>) => {
     setSettings(prev => { 
@@ -322,7 +427,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             language: next.language, currency: next.currency, currency_symbol: next.currencySymbol,
             default_tax_rate: next.defaultTaxRate, business_name: next.businessName,
             business_address: next.businessAddress, business_phone: next.businessPhone,
-            business_email: next.businessEmail, categories: next.categories,
+            business_email: next.businessEmail, categories: next.categories, competitors: next.competitors,
             default_payment_commission_rate: next.defaultPaymentCommissionRate,
             default_payment_commission_fixed: next.defaultPaymentCommissionFixed,
             default_shopify_commission_rate: next.defaultShopifyCommissionRate,
@@ -357,12 +462,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      products, variants, orders, expenses, settings,
+      products, variants, orders, expenses, settings, competitorAds, competitorProfiles,
       addProduct, updateProduct, deleteProduct, deleteProducts,
       addVariant, updateVariant, deleteVariant,
       addOrder, updateOrder, deleteOrder, deleteOrders,
       addExpense, updateExpense, deleteExpense, deleteExpenses,
       updateSettings, getProduct, getVariant, getVariantsForProduct,
+      addCompetitorAd, updateCompetitorAd, deleteCompetitorAd, deleteCompetitorAds,
+      addCompetitorProfile, updateCompetitorProfile, deleteCompetitorProfile, deleteCompetitorProfiles,
     }}>
       {children}
     </AppContext.Provider>
