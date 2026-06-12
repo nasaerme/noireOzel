@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import TurkeyMap from 'react-turkey-map';
 import citiesData from "@/data/cities.json";
@@ -69,7 +70,7 @@ export default function Reports() {
   const metrics = useMemo(() => {
     const filteredOrders = orders.filter(o => {
       const d = new Date(o.orderDate);
-      return d >= dateRange.start && d <= dateRange.end;
+      return d >= dateRange.start && d <= dateRange.end && o.orderStatus !== 'iade' && o.orderStatus !== 'iptal';
     });
 
     const filteredExpenses = expenses.filter(e => {
@@ -106,12 +107,17 @@ export default function Reports() {
     const profitMargin = subtotal > 0 ? (netProfit / subtotal) * 100 : 0;
 
     // Product sales
-    const productSales: Record<string, { satis: number; hediye: number; revenue: number }> = {};
+    const productSales: Record<string, { satis: number; hediye: number; revenue: number; variants: Record<string, number> }> = {};
     const variantSales: Record<string, { satis: number; hediye: number; revenue: number }> = {};
     filteredOrders.forEach(o => o.items.forEach(item => {
-      if (!productSales[item.productId]) productSales[item.productId] = { satis: 0, hediye: 0, revenue: 0 };
+      if (!productSales[item.productId]) productSales[item.productId] = { satis: 0, hediye: 0, revenue: 0, variants: {} };
       if (!variantSales[item.variantId]) variantSales[item.variantId] = { satis: 0, hediye: 0, revenue: 0 };
       
+      const v = variants.find(x => x.id === item.variantId);
+      const vName = v ? v.name : 'Bilinmeyen';
+      if (!productSales[item.productId].variants[vName]) productSales[item.productId].variants[vName] = 0;
+      productSales[item.productId].variants[vName] += item.quantity;
+
       if (item.isGift) {
         productSales[item.productId].hediye += item.quantity;
         variantSales[item.variantId].hediye += item.quantity;
@@ -123,7 +129,7 @@ export default function Reports() {
       }
     }));
 
-    const topProducts = Object.entries(productSales)
+    const allProductsList = Object.entries(productSales)
       .filter(([id]) => {
         if (productCategoryFilter !== 'all') {
           const p = products.find(prod => prod.id === id);
@@ -132,29 +138,36 @@ export default function Reports() {
         return true;
       })
       .sort(([, a], [, b]) => (b.satis + b.hediye) - (a.satis + a.hediye))
-      .slice(0, 10)
       .map(([id, stats]) => {
         const name = products.find(p => p.id === id)?.name || id;
+        const variantsStr = Object.entries(stats.variants)
+          .map(([vName, qty]) => `${qty} ${vName}`)
+          .join(', ');
+
         return {
+          id,
           name,
-          label: `${name} (${formatCurrency(stats.revenue, settings.currencySymbol)})`,
+          label: `${name} [${variantsStr}] (${formatCurrency(stats.revenue, settings.currencySymbol)})`,
           satis: stats.satis,
           hediye: stats.hediye,
           toplam: stats.satis + stats.hediye,
           gelir: stats.revenue,
+          variantsStr,
         };
       });
 
+    const topProducts = allProductsList.slice(0, 10);
+
     const hasProductSales = Object.keys(productSales).length > 0;
 
-    const topVariants = Object.entries(variantSales)
+    const allVariantsList = Object.entries(variantSales)
       .sort(([, a], [, b]) => (b.satis + b.hediye) - (a.satis + a.hediye))
-      .slice(0, 10)
       .map(([id, stats]) => {
         const v = variants.find(x => x.id === id);
         const p = products.find(x => x.id === v?.productId);
-        const name = `${p?.name} ${v?.name}`;
+        const name = p && v ? `${p.name} - ${v.name}` : id;
         return { 
+          id,
           name,
           label: `${name} (${formatCurrency(stats.revenue, settings.currencySymbol)})`,
           satis: stats.satis, 
@@ -163,6 +176,8 @@ export default function Reports() {
           gelir: stats.revenue,
         };
       });
+
+    const topVariants = allVariantsList.slice(0, 10);
 
     // Expense breakdown
     const expBreakdown = settings.expenseCategories.map(cat => ({
@@ -222,7 +237,7 @@ export default function Reports() {
       shippingCost, packagingCost, paymentCommission, shopifyCommission, totalCommission,
       giftCost, totalDiscounts, totalOrderCosts, totalExpensesAll,
       totalBusinessExpenses, grossProfit, netProfit, profitMargin,
-      topProducts, topVariants, expBreakdown, timeData, mapColors, mapTooltips, topCities,
+      topProducts, topVariants, allProductsList, allVariantsList, expBreakdown, timeData, mapColors, mapTooltips, topCities,
       hasProductSales
     };
   }, [orders, expenses, dateRange, products, variants, settings, productCategoryFilter]);
@@ -382,7 +397,7 @@ export default function Reports() {
                     <BarChart data={metrics.topProducts} layout="vertical" margin={{ left: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis type="number" tick={{ fontSize: 10 }} />
-                      <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={180} />
+                      <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={240} />
                       <Tooltip 
                         contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }} 
                         formatter={(value: number, name: string) => [`${value} Adet`, name]}
@@ -497,6 +512,72 @@ export default function Reports() {
         )}
 
       </div>
+
+      {/* All Products & Variants Tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {metrics.allProductsList.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Tüm Ürün Satışları</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[400px] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
+                    <TableRow>
+                      <TableHead>Ürün</TableHead>
+                      <TableHead>Bedenler</TableHead>
+                      <TableHead className="text-right">Adet</TableHead>
+                      <TableHead className="text-right">Gelir</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {metrics.allProductsList.map((p, i) => (
+                      <TableRow key={p.id || i}>
+                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{p.variantsStr}</TableCell>
+                        <TableCell className="text-right">{p.toplam}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(p.gelir, sym)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {metrics.allVariantsList.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Tüm Beden/Varyant Satışları</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[400px] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
+                    <TableRow>
+                      <TableHead>Ürün - Beden</TableHead>
+                      <TableHead className="text-right">Adet</TableHead>
+                      <TableHead className="text-right">Gelir</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {metrics.allVariantsList.map((v, i) => (
+                      <TableRow key={v.id || i}>
+                        <TableCell className="font-medium">{v.name}</TableCell>
+                        <TableCell className="text-right">{v.toplam}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(v.gelir, sym)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
     </div>
   );
 }

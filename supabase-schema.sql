@@ -111,3 +111,17 @@ ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
+
+-- 4. Independent Cash Ledger
+CREATE TABLE cash_ledger (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  type TEXT NOT NULL, -- 'gelir' (inflow) or 'gider' (outflow)
+  name TEXT NOT NULL, -- Brand/Person name (Ahmet, Mehmet)
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE cash_ledger DISABLE ROW LEVEL SECURITY;
+

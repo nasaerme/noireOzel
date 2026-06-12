@@ -23,7 +23,9 @@ export default function Dashboard() {
     let weekRev = 0, weekOrderProfit = 0;
     let monthRev = 0, monthOrderProfit = 0, monthOrders = 0;
 
-    orders.forEach(o => {
+    const validOrders = orders.filter(o => o.orderStatus !== 'iade' && o.orderStatus !== 'iptal');
+
+    validOrders.forEach(o => {
       const calc = calculateOrder(o);
       const d = new Date(o.orderDate);
       if (o.orderDate.startsWith(todayStr)) {
@@ -103,7 +105,8 @@ export default function Dashboard() {
   const chartData = useMemo(() => {
     const days: Record<string, { date: string; gelir: number; kar: number }> = {};
     const last14 = new Date(now.getTime() - 14 * 86400000);
-    orders.forEach(o => {
+    const validOrders = orders.filter(o => o.orderStatus !== 'iade' && o.orderStatus !== 'iptal');
+    validOrders.forEach(o => {
       const d = new Date(o.orderDate);
       if (d >= last14) {
         const key = o.orderDate.split('T')[0];
@@ -117,17 +120,30 @@ export default function Dashboard() {
   }, [orders, now]);
 
   const topProducts = useMemo(() => {
-    const map: Record<string, number> = {};
-    orders.forEach(o => o.items.forEach(item => {
+    const map: Record<string, { total: number, variants: Record<string, number> }> = {};
+    const validOrders = orders.filter(o => o.orderStatus !== 'iade' && o.orderStatus !== 'iptal');
+    validOrders.forEach(o => o.items.forEach(item => {
       if (!item.isGift) {
-        map[item.productId] = (map[item.productId] || 0) + item.quantity;
+        if (!map[item.productId]) map[item.productId] = { total: 0, variants: {} };
+        map[item.productId].total += item.quantity;
+        
+        const v = variants.find(x => x.id === item.variantId);
+        const vName = v ? v.name : 'Bilinmeyen';
+        if (!map[item.productId].variants[vName]) map[item.productId].variants[vName] = 0;
+        map[item.productId].variants[vName] += item.quantity;
       }
     }));
     return Object.entries(map)
-      .sort(([, a], [, b]) => b - a)
+      .sort(([, a], [, b]) => b.total - a.total)
       .slice(0, 5)
-      .map(([id, qty]) => ({ product: products.find(p => p.id === id), qty }));
-  }, [orders, products]);
+      .map(([id, data]) => {
+        const product = products.find(p => p.id === id);
+        const variantsStr = Object.entries(data.variants)
+          .map(([vName, qty]) => `${qty} ${vName}`)
+          .join(', ');
+        return { product, qty: data.total, variantsStr };
+      });
+  }, [orders, products, variants]);
 
   const getProduct = (id: string) => products.find(p => p.id === id);
 
@@ -286,11 +302,14 @@ export default function Dashboard() {
               <CardTitle className="text-base">En Çok Satanlar</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {topProducts.map(({ product, qty }, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="truncate">{product?.name}</span>
-                    <span className="text-muted-foreground">{qty} adet</span>
+              <div className="space-y-3">
+                {topProducts.map(({ product, qty, variantsStr }, i) => (
+                  <div key={i} className="flex flex-col text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                    <div className="flex justify-between">
+                      <span className="truncate font-medium">{product?.name}</span>
+                      <span className="text-muted-foreground whitespace-nowrap ml-2">{qty} adet</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground mt-1">{variantsStr}</span>
                   </div>
                 ))}
               </div>

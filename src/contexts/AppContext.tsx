@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
-import { Product, ProductVariant, Order, Expense, Settings, CompetitorAd, CompetitorProfile } from '@/types';
+import { Product, ProductVariant, Order, Expense, Settings, CompetitorAd, CompetitorProfile, CashTransaction } from '@/types';
 import { generateId, generateOrderNumber } from '@/utils/formatters';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ interface AppContextType {
   orders: Order[];
   expenses: Expense[];
   settings: Settings;
+  cashTransactions: CashTransaction[];
   addProduct: (p: Omit<Product, 'id' | 'createdAt'>, newVariants?: Omit<ProductVariant, 'id' | 'productId'>[]) => Product;
   updateProduct: (p: Product) => void;
   deleteProduct: (id: string) => void;
@@ -39,7 +40,12 @@ interface AppContextType {
   updateCompetitorProfile: (p: CompetitorProfile) => void;
   deleteCompetitorProfile: (id: string) => void;
   deleteCompetitorProfiles: (ids: string[]) => void;
+  addCashTransaction: (t: Omit<CashTransaction, 'id' | 'createdAt'>) => void;
+  updateCashTransaction: (t: CashTransaction) => void;
+  deleteCashTransaction: (id: string) => void;
+  deleteCashTransactions: (ids: string[]) => void;
 }
+
 
 const AppContext = createContext<AppContextType | null>(null);
 
@@ -56,6 +62,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [competitorAds, setCompetitorAds] = useState<CompetitorAd[]>([]);
   const [competitorProfiles, setCompetitorProfiles] = useState<CompetitorProfile[]>([]);
+  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
   const [settings, setSettings] = useState<Settings>({
     language: 'tr', currency: 'TRY', currencySymbol: '₺', defaultTaxRate: 20, businessName: '', businessAddress: '', businessPhone: '', businessEmail: '', categories: [], competitors: [], expenseCategories: [],
     defaultPaymentCommissionRate: 2.49, defaultPaymentCommissionFixed: 0.25, defaultShopifyCommissionRate: 2.0, defaultShopifyCommissionFixed: 0
@@ -137,6 +144,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
               id: i.id, productId: i.product_id, variantId: i.variant_id, quantity: i.quantity,
               unitSalePrice: i.unit_sale_price, unitCostPrice: i.unit_cost_price, isGift: i.is_gift
             }))
+          })));
+        }
+
+        // Fetch Cash Transactions
+        const { data: ctD } = await supabase.from('cash_ledger').select('*').order('date', { ascending: false });
+        if (ctD) {
+          setCashTransactions(ctD.map(ct => ({
+            id: ct.id, date: ct.date, type: ct.type as 'gelir' | 'gider', name: ct.name,
+            amount: ct.amount, description: ct.description || '', createdAt: ct.created_at
           })));
         }
       } catch (err) {
@@ -267,7 +283,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateOrder = useCallback((o: Order) => {
-    setOrders(prev => prev.map(x => x.id === o.id ? o : x));
+    setOrders(prev => {
+      const oldOrder = prev.find(x => x.id === o.id);
+      if (oldOrder) {
+        const wasReturnedOrCanceled = oldOrder.orderStatus === 'iade' || oldOrder.orderStatus === 'iptal';
+        const isReturnedOrCanceled = o.orderStatus === 'iade' || o.orderStatus === 'iptal';
+
+        if (!wasReturnedOrCanceled && isReturnedOrCanceled) {
+          // Stokları geri al (artır)
+          setVariants(vPrev => vPrev.map(v => {
+            const item = o.items.find(i => i.variantId === v.id);
+            return item ? { ...v, stock: v.stock + item.quantity } : v;
+          }));
+          o.items.forEach(async item => {
+            const latestV = await supabase.from('product_variants').select('stock').eq('id', item.variantId).single();
+            if (latestV.data) supabase.from('product_variants').update({ stock: latestV.data.stock + item.quantity }).eq('id', item.variantId).then();
+          });
+        } else if (wasReturnedOrCanceled && !isReturnedOrCanceled) {
+          // Stokları tekrar düş
+          setVariants(vPrev => vPrev.map(v => {
+            const item = o.items.find(i => i.variantId === v.id);
+            return item ? { ...v, stock: v.stock - item.quantity } : v;
+          }));
+          o.items.forEach(async item => {
+            const latestV = await supabase.from('product_variants').select('stock').eq('id', item.variantId).single();
+            if (latestV.data) supabase.from('product_variants').update({ stock: latestV.data.stock - item.quantity }).eq('id', item.variantId).then();
+          });
+        }
+      }
+      return prev.map(x => x.id === o.id ? o : x);
+    });
+
     supabase.from('orders').update({
        tax_rate: o.taxRate, shipping_cost: o.shippingCost, payment_status: o.paymentStatus || 'beklemede',
        order_status: o.orderStatus || 'yeni', notes: o.notes, city: o.city, district: o.district
@@ -455,6 +501,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // --- CASH TRANSACTIONS ---
+  const addCashTransaction = useCallback((t: Omit<CashTransaction, 'id' | 'createdAt'>) => {
+    const id = generateId();
+    const createdAt = new Date().toISOString();
+    const newT: CashTransaction = { ...t, id, createdAt };
+    setCashTransactions(prev => [newT, ...prev]);
+
+    supabase.from('cash_ledger').insert({
+      id, date: t.date, type: t.type, name: t.name,
+      amount: t.amount, description: t.description, created_at: createdAt
+    }).then(({ error }) => {
+      if (error) {
+        console.error("Mali işlem ekleme hatası:", error);
+        toast.error("İşlem kaydedilemedi: " + error.message);
+      }
+    });
+  }, []);
+
+  const updateCashTransaction = useCallback((t: CashTransaction) => {
+    setCashTransactions(prev => prev.map(x => x.id === t.id ? t : x));
+    supabase.from('cash_ledger').update({
+      date: t.date, type: t.type, name: t.name,
+      amount: t.amount, description: t.description
+    }).eq('id', t.id).then(({ error }) => {
+      if (error) {
+        console.error("Mali işlem güncelleme hatası:", error);
+        toast.error("İşlem güncellenemedi: " + error.message);
+      }
+    });
+  }, []);
+
+  const deleteCashTransaction = useCallback((id: string) => {
+    setCashTransactions(prev => prev.filter(x => x.id !== id));
+    supabase.from('cash_ledger').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error("Mali işlem silme hatası:", error);
+        toast.error("İşlem silinemedi: " + error.message);
+      }
+    });
+  }, []);
+
+  const deleteCashTransactions = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setCashTransactions(prev => prev.filter(x => !idSet.has(x.id)));
+    supabase.from('cash_ledger').delete().in('id', ids).then(({ error }) => {
+      if (error) {
+        console.error("Mali işlem toplu silme hatası:", error);
+        toast.error("İşlemler silinemedi: " + error.message);
+      }
+    });
+  }, []);
+
   // --- HELPERS ---
   const getProduct = useCallback((id: string) => products.find(p => p.id === id), [products]);
   const getVariant = useCallback((id: string) => variants.find(v => v.id === id), [variants]);
@@ -462,7 +560,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      products, variants, orders, expenses, settings, competitorAds, competitorProfiles,
+      products, variants, orders, expenses, settings, competitorAds, competitorProfiles, cashTransactions,
       addProduct, updateProduct, deleteProduct, deleteProducts,
       addVariant, updateVariant, deleteVariant,
       addOrder, updateOrder, deleteOrder, deleteOrders,
@@ -470,6 +568,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateSettings, getProduct, getVariant, getVariantsForProduct,
       addCompetitorAd, updateCompetitorAd, deleteCompetitorAd, deleteCompetitorAds,
       addCompetitorProfile, updateCompetitorProfile, deleteCompetitorProfile, deleteCompetitorProfiles,
+      addCashTransaction, updateCashTransaction, deleteCashTransaction, deleteCashTransactions,
     }}>
       {children}
     </AppContext.Provider>

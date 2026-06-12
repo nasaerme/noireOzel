@@ -31,6 +31,7 @@ export const paymentStatusLabels: Record<string, string> = {
   beklemede: 'Beklemede',
   odendi: 'Ödendi',
   iptal: 'İptal',
+  iade: 'İade Edildi',
 };
 
 export const orderStatusLabels: Record<string, string> = {
@@ -39,12 +40,14 @@ export const orderStatusLabels: Record<string, string> = {
   kargoda: 'Kargoda',
   teslim_edildi: 'Teslim Edildi',
   iptal: 'İptal',
+  iade: 'İade Edildi',
 };
 
 export const paymentStatusColors: Record<string, string> = {
   beklemede: 'bg-warning/10 text-warning',
   odendi: 'bg-success/10 text-success',
   iptal: 'bg-destructive/10 text-destructive',
+  iade: 'bg-secondary text-secondary-foreground',
 };
 
 export const orderStatusColors: Record<string, string> = {
@@ -53,4 +56,5 @@ export const orderStatusColors: Record<string, string> = {
   kargoda: 'bg-primary/10 text-primary',
   teslim_edildi: 'bg-success/10 text-success',
   iptal: 'bg-destructive/10 text-destructive',
+  iade: 'bg-secondary text-secondary-foreground',
 };

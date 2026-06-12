@@ -17,6 +17,8 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
   const [city, setCity] = useState(order.city || "");
   const [district, setDistrict] = useState(order.district || "");
   const [notes, setNotes] = useState(order.notes || "");
+  const [orderStatus, setOrderStatus] = useState(order.orderStatus || "yeni");
+  const [paymentStatus, setPaymentStatus] = useState(order.paymentStatus || "beklemede");
 
   const selectedCityData = citiesData.find(c => c.name === city);
   const districtOptions = selectedCityData ? selectedCityData.districts : [];
@@ -29,6 +31,8 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
       city,
       district,
       notes,
+      orderStatus,
+      paymentStatus,
     });
     toast.success("Sipariş güncellendi");
     onClose();
@@ -37,6 +41,32 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label className="text-xs">Sipariş Durumu</Label>
+          <Select value={orderStatus} onValueChange={(v: string) => setOrderStatus(v)}>
+            <SelectTrigger><SelectValue placeholder="Durum Seç" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="yeni">Yeni</SelectItem>
+              <SelectItem value="hazirlaniyor">Hazırlanıyor</SelectItem>
+              <SelectItem value="kargoda">Kargoda</SelectItem>
+              <SelectItem value="teslim_edildi">Teslim Edildi</SelectItem>
+              <SelectItem value="iptal">İptal</SelectItem>
+              <SelectItem value="iade">İade Edildi</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs">Ödeme Durumu</Label>
+          <Select value={paymentStatus} onValueChange={(v: string) => setPaymentStatus(v)}>
+            <SelectTrigger><SelectValue placeholder="Ödeme Seç" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="beklemede">Beklemede</SelectItem>
+              <SelectItem value="odendi">Ödendi</SelectItem>
+              <SelectItem value="iptal">İptal</SelectItem>
+              <SelectItem value="iade">İade Edildi</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-2">
           <Label className="text-xs">İl</Label>
           <Select value={city} onValueChange={(v: string) => { setCity(v); setDistrict(""); }}>

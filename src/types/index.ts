@@ -133,3 +133,14 @@ export interface CompetitorProfile {
   instagramUrl?: string;
   createdAt: string;
 }
+
+export interface CashTransaction {
+  id: string;
+  date: string;
+  type: 'gelir' | 'gider';
+  name: string; // Marka / Kişi adı (Ahmet, Mehmet)
+  amount: number;
+  description: string;
+  createdAt: string;
+}
+
