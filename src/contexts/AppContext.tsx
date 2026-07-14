@@ -315,6 +315,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     supabase.from('orders').update({
+       order_date: o.orderDate,
        tax_rate: o.taxRate, shipping_cost: o.shippingCost, payment_status: o.paymentStatus || 'beklemede',
        order_status: o.orderStatus || 'yeni', notes: o.notes, city: o.city, district: o.district
     }).eq('id', o.id).then();

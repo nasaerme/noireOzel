@@ -19,13 +19,25 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
   const [notes, setNotes] = useState(order.notes || "");
   const [orderStatus, setOrderStatus] = useState(order.orderStatus || "yeni");
   const [paymentStatus, setPaymentStatus] = useState(order.paymentStatus || "beklemede");
+  const [orderDate, setOrderDate] = useState(
+    order.orderDate ? order.orderDate.split('T')[0] : new Date().toISOString().split('T')[0]
+  );
 
   const selectedCityData = citiesData.find(c => c.name === city);
   const districtOptions = selectedCityData ? selectedCityData.districts : [];
 
   const handleSave = () => {
+    const originalDate = new Date(order.orderDate);
+    const [year, month, day] = orderDate.split('-').map(Number);
+    const finalDate = new Date(originalDate);
+    if (!isNaN(finalDate.getTime())) {
+      finalDate.setFullYear(year, month - 1, day);
+    }
+    const orderDateISO = finalDate.toISOString();
+
     updateOrder({
       ...order,
+      orderDate: orderDateISO,
       taxRate,
       shippingCost,
       city,
@@ -41,6 +53,10 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label className="text-xs">Sipariş Tarihi</Label>
+          <Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
+        </div>
         <div className="space-y-2">
           <Label className="text-xs">Sipariş Durumu</Label>
           <Select value={orderStatus} onValueChange={(v: string) => setOrderStatus(v)}>
