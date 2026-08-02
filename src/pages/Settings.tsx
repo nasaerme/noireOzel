@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,10 @@ export default function SettingsPage() {
   const [newCategory, setNewCategory] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newCompetitor, setNewCompetitor] = useState("");
+
+  useEffect(() => {
+    setForm({ ...settings });
+  }, [settings]);
 
   const save = () => {
     updateSettings(form);
@@ -48,13 +52,13 @@ export default function SettingsPage() {
   const addExpenseCategory = () => {
     if (newExpCat) {
       const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#06b6d4', '#f59e0b', '#10b981'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
       setForm({
         ...form,
-        expenseCategories: [...form.expenseCategories, {
-          id: generateId(),
-          name: newExpCat,
-          color: colors[form.expenseCategories.length % colors.length],
-        }],
+        expenseCategories: [
+          ...form.expenseCategories,
+          { id: 'ec_' + generateId(), name: newExpCat, color: randomColor }
+        ]
       });
       setNewExpCat("");
     }
@@ -188,6 +192,15 @@ export default function SettingsPage() {
                         <Label className="text-xs font-medium">İşlem Başı Sabit Ücret ({form.currencySymbol})</Label>
                         <Input type="number" step="0.01" value={form.defaultShopifyCommissionFixed || 0} onChange={e => setForm({ ...form, defaultShopifyCommissionFixed: Number(e.target.value) })} className="bg-background" />
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors">
+                    <h5 className="font-semibold text-sm flex items-center gap-2">📦 Kapıda Ödeme Hizmet Bedeli</h5>
+                    <p className="text-xs text-muted-foreground leading-relaxed h-12">Kapıda ödemeli sipariş oluşturulduğunda otomatik eklenecek varsayılan hizmet tutarı.</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Hizmet Bedeli ({form.currencySymbol})</Label>
+                      <Input type="number" step="1" value={form.defaultCashOnDeliveryFee ?? 100} onChange={e => setForm({ ...form, defaultCashOnDeliveryFee: Number(e.target.value) })} className="bg-background max-w-[200px]" />
                     </div>
                   </div>
 

@@ -23,7 +23,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AppProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AppLayout>
             <Routes>
               <Route path="/" element={<Dashboard />} />

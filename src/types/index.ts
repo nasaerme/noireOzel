@@ -49,6 +49,9 @@ export interface Order {
   orderDate: string;
   paymentStatus?: string;
   orderStatus?: string;
+  paymentMethod?: string; // 'kredi_karti', 'kapida_odeme', 'havale'
+  codFee?: number; // Kapıda Ödeme Hizmet Bedeli
+  cancellationReason?: string; // İptal veya İade Nedeni
   city: string;
   district: string;
   createdAt: string;
@@ -88,10 +91,15 @@ export interface Settings {
   defaultPaymentCommissionFixed: number;
   defaultShopifyCommissionRate: number;
   defaultShopifyCommissionFixed: number;
+  defaultCashOnDeliveryFee?: number;
+  shopifyStoreUrl?: string;
+  shopifyAccessToken?: string;
+  shopifyWebhookSecret?: string;
 }
 
 export interface OrderCalculation {
   subtotal: number;
+  codFee: number;
   totalDiscount: number;
   taxableAmount: number;
   totalTax: number;
@@ -107,6 +115,8 @@ export interface OrderCalculation {
   grossProfit: number;
   netProfit: number;
   profitMargin: number;
+  isCancelled: boolean;
+  cancellationPenalty: number;
 }
 
 export interface CompetitorAd {
@@ -143,4 +153,86 @@ export interface CashTransaction {
   description: string;
   createdAt: string;
 }
+
+export interface BankAccount {
+  id: string;
+  name: string;
+  bankName: string;
+  iban?: string;
+  balance: number;
+  color?: string;
+  createdAt: string;
+}
+
+export interface CreditCard {
+  id: string;
+  name: string;
+  bankName: string;
+  cardNumberLast4?: string;
+  totalLimit: number;
+  currentDebt: number;
+  cutoffDay?: number;
+  dueDay?: number;
+  color?: string;
+  createdAt: string;
+}
+
+export interface SupplierInvoiceItem {
+  id: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number; // KDV hariç birim fiyat
+  taxRate: number; // KDV oranı (%)
+  unitPriceWithTax: number; // KDV dahil birim fiyat
+  totalWithTax: number; // KDV dahil kalem toplamı
+}
+
+export interface SupplierInvoice {
+  id: string;
+  date: string;
+  supplierName: string;
+  invoiceType?: 'product' | 'other'; // 'product' = Çoklu Ürün Alımı, 'other' = Diğer / Genel Gider
+  itemsSummary: string; // Örn: 50x Seraphine Vücut Çorabı, 20x Babydoll veya "Kargo Poşetleri"
+  items?: SupplierInvoiceItem[];
+  subtotal?: number;
+  totalTax?: number;
+  amount: number; // KDV dahil GENEL TOPLAM
+  paymentMethod: 'cash' | 'bank_account' | 'credit_card';
+
+  sourceAccountId?: string; // Banka veya Kredi Kartı ID
+  invoiceFile?: string; // Base64 data URL
+  invoiceFileName?: string;
+  invoiceStatus: 'received' | 'pending'; // 'Fatura Alındı' | 'Fatura Henüz Alınmadı'
+  notes?: string;
+  createdAt: string;
+}
+
+
+export interface ExpectedPayout {
+  id: string;
+  orderId?: string;
+  orderNumber?: string;
+  source: 'paytr' | 'kapida_odeme' | 'diger';
+  amount: number;
+  orderDate: string;
+  expectedPayoutDate: string; // Valör tarihi (+7 gün PayTR, +8 gün Kapıda Ödeme)
+  status: 'pending' | 'completed';
+  receivedAccountId?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface UpcomingPayable {
+  id: string;
+  title: string;
+  category: 'kredi_karti' | 'kira' | 'aidat' | 'fatura' | 'kargo' | 'shopify' | 'diger';
+  amount: number;
+  dueDate: string;
+  status: 'pending' | 'paid';
+  paidFromAccountId?: string;
+  paymentMethod?: 'cash' | 'bank_account' | 'credit_card';
+  notes?: string;
+  createdAt: string;
+}
+
 

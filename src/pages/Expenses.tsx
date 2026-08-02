@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Expense } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Search, Edit2, Trash2, Receipt } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const freqLabels: Record<string, string> = { gunluk: 'Günlük', haftalik: 'Haftalık', aylik: 'Aylık', yillik: 'Yıllık' };
+const ITEMS_PER_PAGE = 25;
 
 export default function Expenses() {
   const { expenses, settings, addExpense, updateExpense, deleteExpense, deleteExpenses } = useApp();
@@ -27,6 +28,7 @@ export default function Expenses() {
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const sym = settings.currencySymbol;
 
   const [form, setForm] = useState({
@@ -45,8 +47,26 @@ export default function Expenses() {
     return true;
   }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, catFilter]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+  const paginatedExpenses = useMemo(() => {
+    const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
   const totalExpenses = filtered.reduce((s, e) => s + e.amount, 0);
-  const getCat = (id: string) => settings.expenseCategories.find(c => c.id === id);
+  const getCat = (idOrName: string, description?: string) => {
+    const isDailyAd = description && (description.toLowerCase().includes('günlük reklam') || description.toLowerCase().includes('gunluk reklam'));
+    const target = isDailyAd ? 'Meta' : idOrName;
+    return settings.expenseCategories.find(c => 
+      c.id === target || 
+      c.name.toLowerCase() === (target || '').toLowerCase() ||
+      (c.name.toLowerCase() === 'meta' && target === 'ec_1')
+    ) || (isDailyAd || target === 'Meta' ? { id: 'meta', name: 'Meta', color: '#3b82f6' } : null);
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -136,16 +156,20 @@ export default function Expenses() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(e => {
-                const cat = getCat(e.categoryId);
+              {paginatedExpenses.map(e => {
+                const cat = getCat(e.categoryId, e.description);
                 return (
                   <tr key={e.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                     <td className="p-3"><Checkbox checked={selectedIds.has(e.id)} onCheckedChange={() => toggleSelect(e.id)} /></td>
                     <td className="p-3 text-muted-foreground">{formatDate(e.date)}</td>
                     <td className="p-3">
-                      <Badge variant="secondary" className="text-[10px]" style={{ backgroundColor: cat?.color + '20', color: cat?.color }}>
-                        {cat?.name}
-                      </Badge>
+                      {cat ? (
+                        <Badge variant="secondary" className="text-[10px] font-semibold" style={{ backgroundColor: (cat.color || '#3b82f6') + '25', color: cat.color || '#3b82f6' }}>
+                          {cat.name}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
                     </td>
                     <td className="p-3">{e.description}</td>
                     <td className="p-3 text-muted-foreground text-xs">{e.recurring ? freqLabels[e.frequency || ''] || 'Tekrarlı' : 'Tek seferlik'}</td>
@@ -169,6 +193,37 @@ export default function Expenses() {
           </div>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-2 py-3 bg-secondary/20 rounded-lg border border-border/50">
+          <div className="text-xs text-muted-foreground">
+            Sayfa <span className="font-semibold text-foreground">{currentPage}</span> / {totalPages} (Toplam {filtered.length} gider)
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="h-8 text-xs gap-1"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" /> Önceki
+            </Button>
+            <div className="text-xs font-semibold px-2 py-1 bg-background rounded border border-border">
+              {currentPage}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="h-8 text-xs gap-1"
+            >
+              Sonraki <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
@@ -219,3 +274,4 @@ export default function Expenses() {
     </div>
   );
 }
+

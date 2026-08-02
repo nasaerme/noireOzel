@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { OrderItem } from "@/types";
 import { calculateOrder } from "@/utils/calculations";
-import { formatCurrency, generateId } from "@/utils/formatters";
+import { formatCurrency, generateId, generateOrderNumber } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,11 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
   const { products, variants, settings, addOrder, getVariantsForProduct } = useApp();
   const sym = settings.currencySymbol;
 
+  const [orderNumber, setOrderNumber] = useState(generateOrderNumber());
+  const [paymentMethod, setPaymentMethod] = useState<'kredi_karti' | 'kapida_odeme' | 'havale'>('kredi_karti');
+  const [codFee, setCodFee] = useState(settings.defaultCashOnDeliveryFee ?? 100);
+  const [paymentStatus, setPaymentStatus] = useState<'beklemede' | 'odendi' | 'iptal' | 'iade'>('odendi');
+
   const [items, setItems] = useState<OrderItem[]>([]);
   const [taxRate, setTaxRate] = useState(settings.defaultTaxRate);
   const [shippingCost, setShippingCost] = useState(25);
@@ -28,6 +33,7 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
   const [discountRate, setDiscountRate] = useState(0);
   const [extraExpense, setExtraExpense] = useState(0);
   const [notes, setNotes] = useState("");
+  const [cancellationReason, setCancellationReason] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
   const [city, setCity] = useState("");
   const [district, setDistrict] = useState("");
@@ -35,8 +41,33 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
   const selectedCityData = citiesData.find(c => c.name === city);
   const districtOptions = selectedCityData ? selectedCityData.districts : [];
 
+  const handlePaymentMethodChange = (method: 'kredi_karti' | 'kapida_odeme' | 'havale') => {
+    setPaymentMethod(method);
+    if (method === 'kredi_karti') {
+      setPaymentStatus('odendi');
+      setCodFee(0);
+    } else if (method === 'kapida_odeme') {
+      setPaymentStatus('beklemede');
+      setCodFee(settings.defaultCashOnDeliveryFee ?? 100);
+    } else {
+      setPaymentStatus('beklemede');
+      setCodFee(0);
+    }
+  };
+
+  const activeProducts = useMemo(() => products.filter(p => p.active), [products]);
+
+  const variantsByProduct = useMemo(() => {
+    const map: Record<string, typeof variants> = {};
+    variants.forEach(v => {
+      if (!map[v.productId]) map[v.productId] = [];
+      map[v.productId].push(v);
+    });
+    return map;
+  }, [variants]);
+
   const addItem = (isGift = false) => {
-    setItems([...items, {
+    setItems(prev => [...prev, {
       id: generateId(),
       productId: '',
       variantId: '',
@@ -48,30 +79,32 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
   };
 
   const updateItem = (idx: number, updates: Partial<OrderItem>) => {
-    const newItems = [...items];
-    newItems[idx] = { ...newItems[idx], ...updates };
+    setItems(prev => {
+      const newItems = [...prev];
+      newItems[idx] = { ...newItems[idx], ...updates };
 
-    if (updates.productId) {
-      const p = products.find(x => x.id === updates.productId);
-      if (p) {
-        newItems[idx].unitSalePrice = p.salePrice;
-        newItems[idx].unitCostPrice = p.costPrice;
-        newItems[idx].variantId = '';
+      if (updates.productId) {
+        const p = products.find(x => x.id === updates.productId);
+        if (p) {
+          newItems[idx].unitSalePrice = p.salePrice;
+          newItems[idx].unitCostPrice = p.costPrice;
+          newItems[idx].variantId = '';
+        }
       }
-    }
-    if (updates.variantId) {
-      const v = variants.find(x => x.id === updates.variantId);
-      const p = products.find(x => x.id === newItems[idx].productId);
-      if (v && p) {
-        newItems[idx].unitSalePrice = v.salePriceOverride ?? p.salePrice;
-        newItems[idx].unitCostPrice = v.costPriceOverride ?? p.costPrice;
+      if (updates.variantId) {
+        const v = variants.find(x => x.id === updates.variantId);
+        const p = products.find(x => x.id === newItems[idx].productId);
+        if (v && p) {
+          newItems[idx].unitSalePrice = v.salePriceOverride ?? p.salePrice;
+          newItems[idx].unitCostPrice = v.costPriceOverride ?? p.costPrice;
+        }
       }
-    }
-    setItems(newItems);
+      return newItems;
+    });
   };
 
   const removeItem = (idx: number) => {
-    setItems(items.filter((_, i) => i !== idx));
+    setItems(prev => prev.filter((_, i) => i !== idx));
   };
 
   const orderForCalc = useMemo(() => ({
@@ -80,8 +113,9 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
     paymentCommissionRate, paymentCommissionFixed,
     shopifyCommissionRate, shopifyCommissionFixed,
     discountAmount, discountRate,
-    extraExpense, notes, orderDate, city, district,
-  }), [items, taxRate, shippingCost, packagingCost, paymentCommissionRate, paymentCommissionFixed, shopifyCommissionRate, shopifyCommissionFixed, discountAmount, discountRate, extraExpense, notes, orderDate, city, district]);
+    extraExpense, notes: '', orderDate: '', city: '', district: '',
+    paymentMethod, codFee, paymentStatus, orderStatus: 'yeni'
+  }), [items, taxRate, shippingCost, packagingCost, paymentCommissionRate, paymentCommissionFixed, shopifyCommissionRate, shopifyCommissionFixed, discountAmount, discountRate, extraExpense, paymentMethod, codFee, paymentStatus]);
 
   const calc = calculateOrder(orderForCalc);
 
@@ -90,7 +124,7 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
     if (items.some(i => !i.productId || !i.variantId)) { toast.error("Tüm ürün ve varyantları seçin"); return; }
     if (items.some(i => i.quantity <= 0 || isNaN(i.quantity))) { toast.error("Geçerli bir adet girin"); return; }
 
-    // Ürün varyantı bazında toplam istenen miktarı hesapla (hediyeler + normal satışlar birleşir)
+    // Ürün varyantı bazında toplam istenen miktarı hesapla
     const variantQuantities: Record<string, { total: number; productId: string }> = {};
     items.forEach(item => {
       if (item.variantId && item.productId) {
@@ -115,23 +149,26 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
         description: stockErrors.join('\n'),
         duration: 5000,
       });
-      return; // Kaydetmeyi KESİNLİKLE engelle
+      return;
     }
 
     addOrder({
+      orderNumber,
       items, taxRate, shippingCost, packagingCost,
       paymentCommissionRate, paymentCommissionFixed,
       shopifyCommissionRate, shopifyCommissionFixed,
       discountAmount, discountRate,
-      extraExpense, notes, orderDate: new Date(orderDate).toISOString(),
+      extraExpense, notes, orderDate: orderDate ? new Date(orderDate).toISOString() : new Date().toISOString(),
+      paymentMethod, codFee: paymentMethod === 'kapida_odeme' ? codFee : 0,
+      paymentStatus: paymentStatus,
+      orderStatus: (paymentStatus === 'iptal' || paymentStatus === 'iade') ? paymentStatus : 'yeni',
+      cancellationReason,
       city, district
     });
 
     toast.success("Sipariş oluşturuldu");
     onClose();
   };
-
-  const activeProducts = products.filter(p => p.active);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -147,7 +184,7 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
           </div>
 
           {items.map((item, idx) => {
-            const productVariants = item.productId ? getVariantsForProduct(item.productId) : [];
+            const productVariants = item.productId ? (variantsByProduct[item.productId] || []) : [];
             return (
               <div key={item.id} className={`border rounded-lg p-3 space-y-3 ${item.isGift ? 'border-warning/30 bg-warning/5' : 'border-border'}`}>
                 {item.isGift && <Badge className="bg-warning/10 text-warning text-[10px]">Hediye Ürün</Badge>}
@@ -181,25 +218,89 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div><Label className="text-xs">Sipariş Tarihi</Label><Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="text-xs" /></div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
           <div>
-            <Label className="text-xs">İl</Label>
-            <Select value={city} onValueChange={v => { setCity(v); setDistrict(""); }}>
-              <SelectTrigger className="text-xs"><SelectValue placeholder="İl Seç" /></SelectTrigger>
-              <SelectContent>
-                {citiesData.map(c => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs font-semibold text-primary block mb-1 truncate" title="Sipariş No (Shopify Sync)">Sipariş No (Shopify Sync)</Label>
+            <Input value={orderNumber} onChange={e => setOrderNumber(e.target.value)} className="text-xs font-mono font-semibold h-9" placeholder="#ORD-1001" />
           </div>
           <div>
-            <Label className="text-xs">İlçe</Label>
-            <Select value={district} onValueChange={v => setDistrict(v)} disabled={!city}>
-              <SelectTrigger className="text-xs"><SelectValue placeholder="İlçe Seç" /></SelectTrigger>
-              <SelectContent>
-                {districtOptions.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs block mb-1">Sipariş Tarihi</Label>
+            <Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="text-xs h-9" />
+          </div>
+          <div>
+            <Label className="text-xs block mb-1">İl</Label>
+            <select
+              value={city}
+              onChange={e => { setCity(e.target.value); setDistrict(""); }}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">İl Seç</option>
+              {citiesData.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label className="text-xs block mb-1">İlçe</Label>
+            <select
+              value={district}
+              onChange={e => setDistrict(e.target.value)}
+              disabled={!city}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">İlçe Seç</option>
+              {districtOptions.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Payment Method & Status */}
+        <div className="p-3 bg-secondary/30 rounded-lg border border-border/50 space-y-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ödeme Detayları</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div>
+              <Label className="text-xs font-medium block mb-1">Ödeme Yöntemi</Label>
+              <Select value={paymentMethod} onValueChange={(v: any) => handlePaymentMethodChange(v)}>
+                <SelectTrigger className="text-xs h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kredi_karti">💳 Kredi Kartı / Banka Kartı</SelectItem>
+                  <SelectItem value="kapida_odeme">📦 Kapıda Ödeme</SelectItem>
+                  <SelectItem value="havale">🏦 EFT / Havale</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium block mb-1">Ödeme Durumu</Label>
+              <Select
+                value={paymentStatus}
+                onValueChange={(v: any) => setPaymentStatus(v)}
+              >
+                <SelectTrigger className="text-xs h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beklemede">⏳ Beklemede</SelectItem>
+                  <SelectItem value="odendi">✅ Ödendi</SelectItem>
+                  <SelectItem value="iptal">❌ İptal</SelectItem>
+                  <SelectItem value="iade">🔄 İade Edildi</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {paymentMethod === 'kapida_odeme' && (
+              <div>
+                <Label className="text-xs font-medium text-warning block mb-1">Kapıda Ödeme Bedeli ({sym})</Label>
+                <Input type="number" value={codFee} onChange={e => setCodFee(Number(e.target.value))} className="text-xs font-semibold border-warning/50 focus:border-warning h-9" />
+              </div>
+            )}
+            {(paymentStatus === 'iptal' || paymentStatus === 'iade') && (
+              <div className="sm:col-span-2 p-2.5 bg-destructive/10 rounded-lg border border-destructive/30">
+                <Label className="text-xs font-semibold text-destructive block mb-1">
+                  {paymentStatus === 'iade' ? '🔄 İade Nedeni' : '❌ İptal Nedeni'}
+                </Label>
+                <Input
+                  value={cancellationReason}
+                  onChange={e => setCancellationReason(e.target.value)}
+                  placeholder={paymentStatus === 'iade' ? "Örn: Beden uymadı, Müşteri beğenmedi, Defolu ürün..." : "Örn: Müşteri vazgeçti, Yanlış sipariş..."}
+                  className="text-xs bg-background h-8"
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -243,6 +344,9 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
         <div className="sticky top-4 bg-secondary/50 rounded-xl border border-border p-4 space-y-2.5 text-sm">
           <h3 className="font-semibold mb-3">Sipariş Özeti</h3>
           <SummaryRow label="Ara Toplam" value={formatCurrency(calc.subtotal, sym)} />
+          {paymentMethod === 'kapida_odeme' && calc.codFee > 0 && (
+            <SummaryRow label="Kapıda Ödeme Hizmet Bedeli" value={`+${formatCurrency(calc.codFee, sym)}`} accent />
+          )}
           {calc.totalDiscount > 0 && <SummaryRow label="İndirim" value={`-${formatCurrency(calc.totalDiscount, sym)}`} warn />}
           <SummaryRow label="Sipariş Toplamı" value={formatCurrency(calc.taxableAmount, sym)} bold />
           <SummaryRow label={`Vergiler (KDV %${taxRate} Dahil)`} value={formatCurrency(calc.totalTax, sym)} />

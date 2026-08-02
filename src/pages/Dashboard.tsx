@@ -13,23 +13,27 @@ export default function Dashboard() {
   const { orders, products, variants, expenses, settings } = useApp();
   const sym = settings.currencySymbol;
 
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
-  const weekAgo = new Date(now.getTime() - 7 * 86400000);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
   const metrics = useMemo(() => {
-    let todayRev = 0, todayOrderProfit = 0, todayOrders = 0;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    let todayRev = 0, todayCollectedRev = 0, todayPendingRev = 0, todayOrderProfit = 0, todayOrders = 0;
     let weekRev = 0, weekOrderProfit = 0;
-    let monthRev = 0, monthOrderProfit = 0, monthOrders = 0;
+    let monthRev = 0, monthCollectedRev = 0, monthPendingRev = 0, monthOrderProfit = 0, monthOrders = 0;
 
     const validOrders = orders.filter(o => o.orderStatus !== 'iade' && o.orderStatus !== 'iptal');
 
     validOrders.forEach(o => {
       const calc = calculateOrder(o);
       const d = new Date(o.orderDate);
-      if (o.orderDate.startsWith(todayStr)) {
+      const isPaid = o.paymentStatus === 'odendi';
+
+      if (o.orderDate && o.orderDate.startsWith(todayStr)) {
         todayRev += calc.taxableAmount;
+        if (isPaid) todayCollectedRev += calc.taxableAmount;
+        else todayPendingRev += calc.taxableAmount;
         todayOrderProfit += calc.netProfit;
         todayOrders++;
       }
@@ -39,12 +43,14 @@ export default function Dashboard() {
       }
       if (d >= monthStart) {
         monthRev += calc.taxableAmount;
+        if (isPaid) monthCollectedRev += calc.taxableAmount;
+        else monthPendingRev += calc.taxableAmount;
         monthOrderProfit += calc.netProfit;
         monthOrders++;
       }
     });
 
-    const todayExpenses = expenses.filter(e => e.date.startsWith(todayStr)).reduce((s, e) => s + e.amount, 0);
+    const todayExpenses = expenses.filter(e => e.date && e.date.startsWith(todayStr)).reduce((s, e) => s + e.amount, 0);
     const monthExpenses = expenses.filter(e => new Date(e.date) >= monthStart).reduce((s, e) => s + e.amount, 0);
     const weekExpenses = expenses.filter(e => new Date(e.date) >= weekAgo).reduce((s, e) => s + e.amount, 0);
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
@@ -54,8 +60,12 @@ export default function Dashboard() {
     const monthProfit = monthOrderProfit - monthExpenses;
     const monthTotalCost = monthRev - monthProfit;
 
-    return { todayRev, todayProfit, todayOrders, weekRev, weekProfit, monthRev, monthProfit, monthOrders, monthExpenses, monthTotalCost, totalExpenses };
-  }, [orders, expenses, todayStr, weekAgo, monthStart]);
+    return {
+      todayRev, todayCollectedRev, todayPendingRev, todayProfit, todayOrders,
+      weekRev, weekProfit,
+      monthRev, monthCollectedRev, monthPendingRev, monthProfit, monthOrders, monthExpenses, monthTotalCost, totalExpenses
+    };
+  }, [orders, expenses]);
 
   const lowStockVariants = useMemo(() =>
     variants.filter(v => v.stock <= v.lowStockThreshold).slice(0, 8),
@@ -103,6 +113,7 @@ export default function Dashboard() {
   const recentOrders = orders.slice(0, 8);
 
   const chartData = useMemo(() => {
+    const now = new Date();
     const days: Record<string, { date: string; gelir: number; kar: number }> = {};
     const last14 = new Date(now.getTime() - 14 * 86400000);
     const validOrders = orders.filter(o => o.orderStatus !== 'iade' && o.orderStatus !== 'iptal');
@@ -117,7 +128,7 @@ export default function Dashboard() {
       }
     });
     return Object.values(days).sort((a, b) => a.date.localeCompare(b.date));
-  }, [orders, now]);
+  }, [orders]);
 
   const topProducts = useMemo(() => {
     const map: Record<string, { total: number, variants: Record<string, number> }> = {};
@@ -157,8 +168,10 @@ export default function Dashboard() {
       <div className="space-y-4">
         <div className="space-y-2">
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Bugün</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricCard title="Gelir" value={formatCurrency(metrics.todayRev, sym)} icon={<TrendingUp className="h-4 w-4" />} accent />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <MetricCard title="Toplam Ciro" value={formatCurrency(metrics.todayRev, sym)} icon={<TrendingUp className="h-4 w-4" />} accent />
+            <MetricCard title="Tahsil Edilen (Ödendi)" value={formatCurrency(metrics.todayCollectedRev, sym)} />
+            <MetricCard title="Bekleyen Ciro (Kapıda Ödeme)" value={formatCurrency(metrics.todayPendingRev, sym)} />
             <MetricCard title="Net Kâr" value={formatCurrency(metrics.todayProfit, sym)} isNegative={metrics.todayProfit < 0} />
             <MetricCard title="Sipariş" value={metrics.todayOrders.toString()} icon={<ShoppingCart className="h-4 w-4" />} />
           </div>
@@ -166,10 +179,11 @@ export default function Dashboard() {
 
         <div className="space-y-2">
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Bu Ay</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard title="Gelir" value={formatCurrency(metrics.monthRev, sym)} icon={<ArrowUpRight className="h-4 w-4" />} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <MetricCard title="Toplam Ciro" value={formatCurrency(metrics.monthRev, sym)} icon={<ArrowUpRight className="h-4 w-4" />} />
+            <MetricCard title="Tahsil Edilen Ciro" value={formatCurrency(metrics.monthCollectedRev, sym)} />
+            <MetricCard title="Bekleyen Ciro" value={formatCurrency(metrics.monthPendingRev, sym)} />
             <MetricCard title="Net Kâr" value={formatCurrency(metrics.monthProfit, sym)} isNegative={metrics.monthProfit < 0} />
-            <MetricCard title="Toplam Gider" value={formatCurrency(metrics.monthTotalCost, sym)} icon={<ReceiptIcon className="h-4 w-4" />} />
             <MetricCard title="Sipariş" value={metrics.monthOrders.toString()} icon={<ShoppingCart className="h-4 w-4" />} />
           </div>
         </div>

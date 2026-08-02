@@ -4,7 +4,7 @@
 -- 1. Create Tables
 
 -- PRODUCTS
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   sku TEXT NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE products (
 );
 
 -- PRODUCT VARIANTS
-CREATE TABLE product_variants (
+CREATE TABLE IF NOT EXISTS product_variants (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -29,14 +29,14 @@ CREATE TABLE product_variants (
 );
 
 -- EXPENSE CATEGORIES
-CREATE TABLE expense_categories (
+CREATE TABLE IF NOT EXISTS expense_categories (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   color TEXT NOT NULL
 );
 
 -- EXPENSES
-CREATE TABLE expenses (
+CREATE TABLE IF NOT EXISTS expenses (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   date DATE NOT NULL,
   category_id UUID REFERENCES expense_categories(id) ON DELETE SET NULL,
@@ -49,7 +49,7 @@ CREATE TABLE expenses (
 );
 
 -- ORDERS
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   order_number TEXT NOT NULL,
   tax_rate DECIMAL(5,2) NOT NULL DEFAULT 20.00,
@@ -65,14 +65,17 @@ CREATE TABLE orders (
   notes TEXT,
   order_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   payment_status TEXT NOT NULL DEFAULT 'beklemede', -- 'beklemede', 'odendi', 'iptal'
-  order_status TEXT NOT NULL DEFAULT 'yeni', -- 'yeni', 'hazirlaniyor', 'kargoda', 'teslim_edildi', 'iptal'
+  order_status TEXT NOT NULL DEFAULT 'yeni', -- 'yeni', 'hazirlaniyor', 'kargoda', 'teslim_edildi', 'iptal', 'iade'
+  cancellation_reason TEXT,
   city TEXT,
   district TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+
 -- ORDER ITEMS
-CREATE TABLE order_items (
+CREATE TABLE IF NOT EXISTS order_items (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES products(id),
@@ -84,7 +87,7 @@ CREATE TABLE order_items (
 );
 
 -- SETTINGS
-CREATE TABLE settings (
+CREATE TABLE IF NOT EXISTS settings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   language TEXT NOT NULL DEFAULT 'tr',
   currency TEXT NOT NULL DEFAULT 'TRY',
@@ -94,16 +97,110 @@ CREATE TABLE settings (
   business_address TEXT,
   business_phone TEXT,
   business_email TEXT,
-  categories TEXT[] DEFAULT '{}'
+  categories TEXT[] DEFAULT '{}',
+  shopify_store_url TEXT,
+  shopify_access_token TEXT,
+  shopify_webhook_secret TEXT
 );
 
--- 2. Insert Default Settings (Only 1 row will primarily be used)
-INSERT INTO settings (id, business_name) VALUES (gen_random_uuid(), 'Benim Şirketim');
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_store_url TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_access_token TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_webhook_secret TEXT;
 
--- 3. Set Up Security: Disable Row Level Security (RLS) policies completely for now since there's no Authentication module.
--- Anyone hitting the database endpoint with the anon key can read/write.
--- (This should be secured when you add login/auth features)
+-- CASH LEDGER
+CREATE TABLE IF NOT EXISTS cash_ledger (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  type TEXT NOT NULL, -- 'gelir' (inflow) or 'gider' (outflow)
+  name TEXT NOT NULL, -- Brand/Person name
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
+-- ==================== FİNANS & NAKİT AKIŞI YÖNETİMİ TABLOLARI ====================
+
+-- 5. BANK ACCOUNTS (BANKA HESAPLARI)
+CREATE TABLE IF NOT EXISTS bank_accounts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  bank_name TEXT NOT NULL,
+  iban TEXT,
+  balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+  color TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. CREDIT CARDS (KREDİ KARTLARI)
+CREATE TABLE IF NOT EXISTS credit_cards (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  bank_name TEXT NOT NULL,
+  card_number_last4 TEXT,
+  total_limit DECIMAL(12,2) NOT NULL DEFAULT 0,
+  current_debt DECIMAL(12,2) NOT NULL DEFAULT 0,
+  cutoff_day INTEGER DEFAULT 15,
+  due_day INTEGER DEFAULT 25,
+  color TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. SUPPLIER INVOICES (STOK & TEDARİK ALIMLARI)
+CREATE TABLE IF NOT EXISTS supplier_invoices (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  supplier_name TEXT NOT NULL,
+  invoice_type TEXT NOT NULL DEFAULT 'product', -- 'product' (Çoklu Ürün) or 'other' (Diğer Gider)
+  items_summary TEXT NOT NULL,
+  items JSONB DEFAULT '[]'::jsonb,
+  subtotal DECIMAL(12,2) DEFAULT 0,
+  total_tax DECIMAL(12,2) DEFAULT 0,
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  payment_method TEXT NOT NULL DEFAULT 'cash', -- 'cash', 'bank_account', 'credit_card'
+  source_account_id UUID,
+  invoice_file TEXT, -- Base64 veya Dosya URL
+  invoice_file_name TEXT,
+  invoice_status TEXT NOT NULL DEFAULT 'pending', -- 'received', 'pending'
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Add new columns if supplier_invoices table already exists in DB
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS invoice_type TEXT DEFAULT 'product';
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS subtotal DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS total_tax DECIMAL(12,2) DEFAULT 0;
+
+-- 8. EXPECTED PAYOUTS (VALÖRLÜ ALACAKLAR)
+CREATE TABLE IF NOT EXISTS expected_payouts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+  order_number TEXT,
+  source TEXT NOT NULL, -- 'paytr', 'kapida_odeme', 'diger'
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  order_date TIMESTAMPTZ DEFAULT NOW(),
+  expected_payout_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'completed'
+  received_account_id UUID,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9. UPCOMING PAYABLES (GELECEK BORÇLAR)
+CREATE TABLE IF NOT EXISTS upcoming_payables (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL, -- 'kredi_karti', 'kira', 'aidat', 'fatura', 'kargo', 'shopify', 'diger'
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  due_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'paid'
+  paid_from_account_id UUID,
+  payment_method TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Disable Row Level Security (RLS) policies completely for direct client access
 ALTER TABLE products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE product_variants DISABLE ROW LEVEL SECURITY;
 ALTER TABLE expense_categories DISABLE ROW LEVEL SECURITY;
@@ -111,17 +208,9 @@ ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
-
--- 4. Independent Cash Ledger
-CREATE TABLE cash_ledger (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  date DATE NOT NULL DEFAULT CURRENT_DATE,
-  type TEXT NOT NULL, -- 'gelir' (inflow) or 'gider' (outflow)
-  name TEXT NOT NULL, -- Brand/Person name (Ahmet, Mehmet)
-  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
-  description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 ALTER TABLE cash_ledger DISABLE ROW LEVEL SECURITY;
-
+ALTER TABLE bank_accounts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_cards DISABLE ROW LEVEL SECURITY;
+ALTER TABLE supplier_invoices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE expected_payouts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE upcoming_payables DISABLE ROW LEVEL SECURITY;
