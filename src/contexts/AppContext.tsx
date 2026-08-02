@@ -324,11 +324,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               }))
             };
           }));
-
-          supabase.from('orders')
-            .update({ payment_status: 'odendi' })
-            .eq('payment_status', 'beklemede')
-            .then();
         }
 
         if (ctD && ctD.length > 0) {
