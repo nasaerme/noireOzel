@@ -315,7 +315,7 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div><Label className="text-xs">Kargo Maliyeti ({sym})</Label><Input type="number" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))} className="text-xs" /></div>
           <div><Label className="text-xs">Ambalaj ({sym})</Label><Input type="number" value={packagingCost} onChange={e => setPackagingCost(Number(e.target.value))} className="text-xs" /></div>
-          <div><Label className="text-xs">Ek Gider ({sym})</Label><Input type="number" value={extraExpense} onChange={e => setExtraExpense(Number(e.target.value))} className="text-xs" /></div>
+          <div><Label className="text-xs">Ek Hizmet Bedeli ({sym})</Label><Input type="number" value={extraExpense} onChange={e => setExtraExpense(Number(e.target.value))} className="text-xs" /></div>
         </div>
 
         {/* Payment Commission */}
@@ -359,7 +359,7 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
           <SummaryRow label="Ödeme Komisyonu" value={formatCurrency(calc.paymentCommissionCost, sym)} />
           <SummaryRow label="Shopify Komisyonu" value={formatCurrency(calc.shopifyCommissionCost, sym)} />
           <SummaryRow label="Toplam Komisyon" value={formatCurrency(calc.totalCommissionCost, sym)} bold />
-          {calc.extraExpense > 0 && <SummaryRow label="Ek Gider" value={formatCurrency(calc.extraExpense, sym)} />}
+          {calc.extraExpense > 0 && <SummaryRow label="Ek Hizmet Bedeli" value={formatCurrency(calc.extraExpense, sym)} />}
           <div className="border-t border-border" />
           <SummaryRow label="Toplam Maliyet" value={formatCurrency(calc.totalCost, sym)} />
           <SummaryRow label="Brüt Kâr" value={formatCurrency(calc.grossProfit, sym)} bold />

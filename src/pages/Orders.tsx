@@ -589,7 +589,7 @@ function OrderDetail({
         <Row label="Ödeme Komisyonu" value={formatCurrency(calc.paymentCommissionCost, sym)} />
         <Row label="Shopify Komisyonu" value={formatCurrency(calc.shopifyCommissionCost, sym)} />
         <Row label="Toplam Komisyon" value={formatCurrency(calc.totalCommissionCost, sym)} bold />
-        {calc.extraExpense > 0 && <Row label="Ek Gider" value={formatCurrency(calc.extraExpense, sym)} />}
+        {calc.extraExpense > 0 && <Row label="Ek Hizmet Bedeli" value={formatCurrency(calc.extraExpense, sym)} />}
         <div className="border-t border-border my-2" />
         <Row label="Brüt Kâr" value={formatCurrency(calc.grossProfit, sym)} bold />
         <Row label="Net Kâr" value={formatCurrency(calc.netProfit, sym)} bold accent />
