@@ -111,7 +111,7 @@ export default function Reports() {
 
     let totalTax = 0, totalProductCost = 0;
     let shippingCost = 0, packagingCost = 0, paymentCommission = 0, shopifyCommission = 0, totalCommission = 0;
-    let giftCost = 0, totalDiscounts = 0;
+    let giftCost = 0, totalDiscounts = 0, extraExpense = 0;
 
     let collectedOrderCosts = 0;
     let pendingOrderCosts = 0;
@@ -122,6 +122,7 @@ export default function Reports() {
 
       if (calc.isCancelled) {
         shippingCost += calc.shippingCost;
+        extraExpense += calc.extraExpense;
         collectedOrderCosts += calc.totalCost;
       } else {
         unitsSold += o.items.reduce((s, i) => s + i.quantity, 0);
@@ -135,8 +136,9 @@ export default function Reports() {
         totalCommission += calc.totalCommissionCost;
         giftCost += calc.giftCost;
         totalDiscounts += calc.totalDiscount;
+        extraExpense += calc.extraExpense;
 
-        const orderCost = calc.totalTax + calc.totalProductCost + calc.giftCost + calc.shippingCost + calc.packagingCost + calc.totalCommissionCost;
+        const orderCost = calc.totalTax + calc.totalProductCost + calc.giftCost + calc.shippingCost + calc.packagingCost + calc.totalCommissionCost + calc.extraExpense;
 
         if (isPaid) {
           collectedSubtotal += calc.taxableAmount;
@@ -149,7 +151,7 @@ export default function Reports() {
     });
 
     const totalBusinessExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-    const totalOrderCosts = totalTax + totalProductCost + giftCost + shippingCost + packagingCost + totalCommission;
+    const totalOrderCosts = totalTax + totalProductCost + giftCost + shippingCost + packagingCost + totalCommission + extraExpense;
     const totalExpensesAll = totalOrderCosts + totalBusinessExpenses;
 
     const grossProfit = subtotal - totalProductCost - giftCost;
@@ -533,7 +535,7 @@ export default function Reports() {
 
     return {
       totalOrders, unitsSold, subtotal, collectedSubtotal, pendingSubtotal, totalTax, totalProductCost,
-      shippingCost, packagingCost, paymentCommission, shopifyCommission, totalCommission,
+      shippingCost, packagingCost, extraExpense, paymentCommission, shopifyCommission, totalCommission,
       giftCost, totalDiscounts, totalOrderCosts, totalExpensesAll,
       totalBusinessExpenses, grossProfit, netProfit, collectedNetProfit, pendingNetProfit, profitMargin, collectedProfitMargin,
       topProducts, topVariants, allProductsList, allVariantsList, expBreakdown, timeData, mapColors, mapTooltips, topCities,
@@ -714,11 +716,12 @@ export default function Reports() {
           <div className="space-y-4">
             <div className="space-y-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Sipariş Maliyetleri</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                 <KPI label="Ürün Maliyeti" value={formatCurrency(metrics.totalProductCost, sym)} small />
                 <KPI label="KDV" value={formatCurrency(metrics.totalTax, sym)} small />
                 <KPI label="Kargo" value={formatCurrency(metrics.shippingCost, sym)} small />
                 <KPI label="Ambalaj" value={formatCurrency(metrics.packagingCost, sym)} small />
+                <KPI label="Ek Hizmet" value={formatCurrency(metrics.extraExpense, sym)} small />
                 <KPI label="Hediye Maliyeti" value={formatCurrency(metrics.giftCost, sym)} small />
                 <KPI label="İndirimler" value={formatCurrency(metrics.totalDiscounts, sym)} small />
               </div>
@@ -796,6 +799,10 @@ export default function Reports() {
                   <div className="flex justify-between py-1 border-b border-border/40">
                     <span className="text-muted-foreground">Ambalaj & Paketleme:</span>
                     <span className="font-medium">{formatCurrency(metrics.packagingCost, sym)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-border/40">
+                    <span className="text-muted-foreground">Ek Hizmet Bedeli:</span>
+                    <span className="font-medium">{formatCurrency(metrics.extraExpense, sym)}</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/40">
                     <span className="text-muted-foreground">Hediye Ürün Maliyeti:</span>
