@@ -44,7 +44,7 @@ export function calculateOrder(order: Order): OrderCalculation {
     }
 
     const cancellationPenalty = totalShippingPenalty;
-    const totalCost = cancellationPenalty + order.extraExpense;
+    const totalCost = cancellationPenalty;
     
     return {
       subtotal: 0,
@@ -59,7 +59,7 @@ export function calculateOrder(order: Order): OrderCalculation {
       paymentCommissionCost: 0,
       shopifyCommissionCost: 0,
       totalCommissionCost: 0,
-      extraExpense: order.extraExpense,
+      extraExpense: 0,
       totalCost,
       grossProfit: -cancellationPenalty,
       netProfit: -totalCost,
