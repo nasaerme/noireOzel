@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
-import { Product, ProductVariant, Order, Expense, Settings, CompetitorAd, CompetitorProfile, CashTransaction, BankAccount, CreditCard, SupplierInvoice, ExpectedPayout, UpcomingPayable } from '@/types';
+import { Product, ProductVariant, Order, Expense, ExpenseCategory, Settings, CompetitorAd, CompetitorProfile, CashTransaction, BankAccount, CreditCard, SupplierInvoice, ExpectedPayout, UpcomingPayable } from '@/types';
 import { generateId, generateOrderNumber } from '@/utils/formatters';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -66,7 +66,6 @@ interface AppContextType {
   deleteUpcomingPayable: (id: string) => void;
 }
 
-
 const AppContext = createContext<AppContextType | null>(null);
 
 export function useApp() {
@@ -74,57 +73,6 @@ export function useApp() {
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
 }
-
-const getLocalOrderMeta = (id: string) => {
-  try {
-    const data = localStorage.getItem(`order_meta_${id}`);
-    return data ? JSON.parse(data) : null;
-  } catch { return null; }
-};
-
-const setLocalOrderMeta = (id: string, meta: { paymentMethod?: string; codFee?: number; cancellationReason?: string }) => {
-  try {
-    localStorage.setItem(`order_meta_${id}`, JSON.stringify(meta));
-  } catch {}
-};
-
-const getStorageItem = <T,>(key: string, defaultValue: T): T => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch { return defaultValue; }
-};
-
-const setStorageItem = <T,>(key: string, value: T) => {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
-};
-
-const defaultBankAccounts: BankAccount[] = [
-  { id: 'bank-1', name: 'Ziraat Bankası Ticari', bankName: 'Ziraat Bankası', iban: 'TR12 0001 0002 0003 0004 0005 01', balance: 45000, color: '#16a34a', createdAt: new Date().toISOString() },
-  { id: 'bank-2', name: 'Garanti BBVA Şirket', bankName: 'Garanti BBVA', iban: 'TR62 0006 0007 0008 0009 0010 02', balance: 18500, color: '#2563eb', createdAt: new Date().toISOString() }
-];
-
-const defaultCreditCards: CreditCard[] = [
-  { id: 'card-1', name: 'Garanti Bonus Ticari', bankName: 'Garanti BBVA', cardNumberLast4: '4582', totalLimit: 150000, currentDebt: 32400, cutoffDay: 15, dueDay: 25, color: '#dc2626', createdAt: new Date().toISOString() },
-  { id: 'card-2', name: 'Yapı Kredi World Business', bankName: 'Yapı Kredi', cardNumberLast4: '8819', totalLimit: 100000, currentDebt: 12500, cutoffDay: 10, dueDay: 20, color: '#7c3aed', createdAt: new Date().toISOString() }
-];
-
-const defaultSupplierInvoices: SupplierInvoice[] = [
-  { id: 'inv-1', date: '2026-07-28', supplierName: 'Mecit Aksoy', itemsSummary: '50x Seraphine Vücut Çorabı', amount: 30000, paymentMethod: 'cash', sourceAccountId: 'bank-1', invoiceStatus: 'pending', notes: 'Fatura e-posta ile bekleniyor', createdAt: new Date().toISOString() },
-  { id: 'inv-2', date: '2026-07-20', supplierName: 'Tekstil Center A.Ş.', itemsSummary: '100x Babydoll Gecelik', amount: 45000, paymentMethod: 'credit_card', sourceAccountId: 'card-1', invoiceStatus: 'received', notes: 'Fatura alındı ve sisteme yüklendi', createdAt: new Date().toISOString() }
-];
-
-const defaultExpectedPayouts: ExpectedPayout[] = [
-  { id: 'payout-1', orderNumber: 'ORD-1089', source: 'paytr', amount: 8450, orderDate: '2026-07-26T10:00:00.000Z', expectedPayoutDate: '2026-08-02', status: 'pending', notes: 'PayTR 7 Gün Valörlü Hak Ediş', createdAt: new Date().toISOString() },
-  { id: 'payout-2', orderNumber: 'ORD-1072', source: 'kapida_odeme', amount: 3200, orderDate: '2026-07-24T14:30:00.000Z', expectedPayoutDate: '2026-08-01', status: 'pending', notes: 'Aras Kargo Kapıda Ödeme 8 Gün Valör', createdAt: new Date().toISOString() },
-  { id: 'payout-3', orderNumber: 'ORD-1055', source: 'paytr', amount: 14200, orderDate: '2026-07-20T11:20:00.000Z', expectedPayoutDate: '2026-07-27', status: 'completed', receivedAccountId: 'bank-1', notes: 'Hesaba Yattı', createdAt: new Date().toISOString() }
-];
-
-const defaultUpcomingPayables: UpcomingPayable[] = [
-  { id: 'payable-1', title: 'Garanti Kredi Kartı Ekstresi', category: 'kredi_karti', amount: 32400, dueDate: '2026-08-05', status: 'pending', notes: 'Aylık ekstre son ödeme günü', createdAt: new Date().toISOString() },
-  { id: 'payable-2', title: 'Depo & Dükkan Kirası', category: 'kira', amount: 25000, dueDate: '2026-08-01', status: 'pending', notes: 'Mecit Bey mülk kirası', createdAt: new Date().toISOString() },
-  { id: 'payable-3', title: 'Aras Kargo Taşıma Hakedişi', category: 'kargo', amount: 14800, dueDate: '2026-08-10', status: 'pending', notes: 'Temmuz kargo faturası', createdAt: new Date().toISOString() }
-];
 
 const defaultExpenseCategories: ExpenseCategory[] = [
   { id: 'ec_1', name: 'Meta', color: '#3b82f6' },
@@ -145,11 +93,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [competitorAds, setCompetitorAds] = useState<CompetitorAd[]>([]);
   const [competitorProfiles, setCompetitorProfiles] = useState<CompetitorProfile[]>([]);
   const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(() => getStorageItem('bank_accounts', defaultBankAccounts));
-  const [creditCards, setCreditCards] = useState<CreditCard[]>(() => getStorageItem('credit_cards', defaultCreditCards));
-  const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>(() => getStorageItem('supplier_invoices', defaultSupplierInvoices));
-  const [expectedPayouts, setExpectedPayouts] = useState<ExpectedPayout[]>(() => getStorageItem('expected_payouts', defaultExpectedPayouts));
-  const [upcomingPayables, setUpcomingPayables] = useState<UpcomingPayable[]>(() => getStorageItem('upcoming_payables', defaultUpcomingPayables));
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+  const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
+  const [expectedPayouts, setExpectedPayouts] = useState<ExpectedPayout[]>([]);
+  const [upcomingPayables, setUpcomingPayables] = useState<UpcomingPayable[]>([]);
 
   const defaultSettings: Settings = {
     language: 'tr', currency: 'TRY', currencySymbol: '₺', defaultTaxRate: 20, businessName: 'The Noire Co.', businessAddress: '', businessPhone: '', businessEmail: '', categories: [], competitors: [], expenseCategories: defaultExpenseCategories,
@@ -159,20 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     shopifyWebhookSecret: import.meta.env.VITE_SHOPIFY_WEBHOOK_SECRET || ''
   };
 
-  const [settings, setSettings] = useState<Settings>(() => {
-    const saved = getStorageItem('app_settings', defaultSettings);
-    if (!saved.shopifyStoreUrl) saved.shopifyStoreUrl = import.meta.env.VITE_SHOPIFY_STORE_URL || 'n1gfst-wc.myshopify.com';
-    if (!saved.shopifyAccessToken) saved.shopifyAccessToken = import.meta.env.VITE_SHOPIFY_ACCESS_TOKEN || '';
-    if (!saved.shopifyWebhookSecret) saved.shopifyWebhookSecret = import.meta.env.VITE_SHOPIFY_WEBHOOK_SECRET || '';
-    return saved;
-  });
-
-  useEffect(() => setStorageItem('bank_accounts', bankAccounts), [bankAccounts]);
-  useEffect(() => setStorageItem('credit_cards', creditCards), [creditCards]);
-  useEffect(() => setStorageItem('supplier_invoices', supplierInvoices), [supplierInvoices]);
-  useEffect(() => setStorageItem('expected_payouts', expectedPayouts), [expectedPayouts]);
-  useEffect(() => setStorageItem('upcoming_payables', upcomingPayables), [upcomingPayables]);
-  useEffect(() => setStorageItem('app_settings', settings), [settings]);
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -196,7 +131,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const getResData = (idx: number) => {
           const res = results[idx];
-          return res.status === 'fulfilled' ? res.value.data : null;
+          if (res.status === 'fulfilled') {
+            if (res.value.error) {
+              console.error(`DB Fetch Error [Table idx ${idx}]:`, res.value.error);
+            }
+            return res.value.data;
+          }
+          return null;
         };
 
         const setD = getResData(0);
@@ -216,7 +157,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const loadedExpCategories = ecD ? ecD.map((c: any) => ({ id: c.id, name: c.name, color: c.color })) : [];
 
-        // Auto-recover expense categories from expenses if missing
         const existingCatIds = new Set((loadedExpCategories.length > 0 ? loadedExpCategories : defaultExpenseCategories).map(c => c.id));
         const recoveredCategories = [...(loadedExpCategories.length > 0 ? loadedExpCategories : defaultExpenseCategories)];
 
@@ -255,21 +195,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }));
         }
 
-        if (pD && pD.length > 0) setProducts(pD.map((p: any) => ({
+        if (pD !== null) setProducts(pD.map((p: any) => ({
           id: p.id, name: p.name, sku: p.sku, category: p.category, salePrice: p.sale_price,
           costPrice: p.cost_price, notes: p.notes || '', active: p.active, createdAt: p.created_at
         })));
 
-        if (vD && vD.length > 0) setVariants(vD.map((v: any) => ({
+        if (vD !== null) setVariants(vD.map((v: any) => ({
           id: v.id, productId: v.product_id, name: v.name, sku: v.sku, stock: v.stock,
           lowStockThreshold: v.low_stock_threshold, costPriceOverride: v.cost_price_override,
           salePriceOverride: v.sale_price_override
         })));
 
-        if (eD && eD.length > 0) {
-          // Bulk update Supabase for any 'Günlük Reklam' expenses
-          supabase.from('expenses').update({ category_id: 'ec_1' }).ilike('description', '%günlük reklam%').then();
-
+        if (eD !== null) {
           setExpenses(eD.map((e: any) => {
             const isDailyAd = (e.description || '').toLowerCase().includes('günlük reklam') || (e.description || '').toLowerCase().includes('gunluk reklam');
             return {
@@ -286,25 +223,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }));
         }
 
-        if (caD && caD.length > 0) setCompetitorAds(caD.map((ca: any) => ({
+        if (caD !== null) setCompetitorAds(caD.map((ca: any) => ({
           id: ca.id, productName: ca.product_name, category: ca.category, competitors: ca.competitors,
           adCount: ca.ad_count, adType: ca.ad_type, inStock: ca.in_stock || false, notes: ca.notes || '', createdAt: ca.created_at
         })));
 
-        if (cpD && cpD.length > 0) setCompetitorProfiles(cpD.map((cp: any) => ({
+        if (cpD !== null) setCompetitorProfiles(cpD.map((cp: any) => ({
           id: cp.id, competitorName: cp.competitor_name, creativeCount: cp.creative_count, priceRange: cp.price_range || '',
           strategy: cp.strategy || '', productsNote: cp.products_note || '', 
           adLibraryUrl: cp.ad_library_url || '', websiteUrl: cp.website_url || '', instagramUrl: cp.instagram_url || '',
           createdAt: cp.created_at
         })));
 
-        if (oD && oD.length > 0) {
+        if (oD !== null) {
           setOrders(oD.map((o: any) => {
-            const meta = getLocalOrderMeta(o.id);
-            const paymentMethod = meta?.paymentMethod || o.payment_method || 'kredi_karti';
-            const codFee = meta?.codFee ?? o.cod_fee ?? (paymentMethod === 'kapida_odeme' ? 100 : 0);
-            const paymentStatus = meta?.paymentStatus || o.payment_status || 'beklemede';
-            const cancellationReason = meta?.cancellationReason || o.cancellation_reason || '';
+            const paymentMethod = o.payment_method || 'kredi_karti';
+            const codFee = o.cod_fee ?? (paymentMethod === 'kapida_odeme' ? 100 : 0);
+            const paymentStatus = o.payment_status || 'beklemede';
+            const cancellationReason = o.cancellation_reason || '';
 
             return {
               id: o.id, orderNumber: o.order_number, taxRate: o.tax_rate,
@@ -326,21 +262,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }));
         }
 
-        if (ctD && ctD.length > 0) {
+        if (ctD !== null) {
           setCashTransactions(ctD.map((ct: any) => ({
             id: ct.id, date: ct.date, type: ct.type as 'gelir' | 'gider', name: ct.name,
             amount: ct.amount, description: ct.description || '', createdAt: ct.created_at
           })));
         }
 
-        if (baD && baD.length > 0) {
+        if (baD !== null) {
           setBankAccounts(baD.map((b: any) => ({
             id: b.id, name: b.name, bankName: b.bank_name, iban: b.iban || '',
             balance: Number(b.balance), color: b.color || '#16a34a', createdAt: b.created_at
           })));
         }
 
-        if (ccD && ccD.length > 0) {
+        if (ccD !== null) {
           setCreditCards(ccD.map((c: any) => ({
             id: c.id, name: c.name, bankName: c.bank_name, cardNumberLast4: c.card_number_last4 || '',
             totalLimit: Number(c.total_limit), currentDebt: Number(c.current_debt),
@@ -348,7 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })));
         }
 
-        if (siD && siD.length > 0) {
+        if (siD !== null) {
           setSupplierInvoices(siD.map((s: any) => ({
             id: s.id, date: s.date, supplierName: s.supplier_name,
             invoiceType: s.invoice_type || 'product', itemsSummary: s.items_summary,
@@ -360,7 +296,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })));
         }
 
-        if (epD && epD.length > 0) {
+        if (epD !== null) {
           setExpectedPayouts(epD.map((p: any) => ({
             id: p.id, orderId: p.order_id, orderNumber: p.order_number,
             source: p.source, amount: Number(p.amount), orderDate: p.order_date,
@@ -369,7 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })));
         }
 
-        if (upD && upD.length > 0) {
+        if (upD !== null) {
           setUpcomingPayables(upD.map((u: any) => ({
             id: u.id, title: u.title, category: u.category, amount: Number(u.amount),
             dueDate: u.due_date, status: u.status, paidFromAccountId: u.paid_from_account_id,
@@ -383,74 +319,117 @@ export function AppProvider({ children }: { children: ReactNode }) {
     fetchData();
   }, []);
 
+  // --- PRODUCTS & VARIANTS ---
   const addProduct = useCallback((p: Omit<Product, 'id' | 'createdAt'>, newVariants?: Omit<ProductVariant, 'id' | 'productId'>[]) => {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newP: Product = { ...p, id, createdAt };
-    setProducts(prev => [...prev, newP]);
+    
     supabase.from('products').insert({
       id, name: p.name, sku: p.sku, category: p.category, sale_price: p.salePrice,
       cost_price: p.costPrice, notes: p.notes, active: p.active, created_at: createdAt
-    }).then(({ error }) => { if (error) toast.error("Supabase Error: " + error.message); });
+    }).then(({ error }) => {
+      if (error) {
+        console.error("Ürün ekleme DB hatası:", error);
+        toast.error("DB Kayıt Hatası: " + error.message);
+      } else {
+        setProducts(prev => [...prev, newP]);
+      }
+    });
+
     if (newVariants && newVariants.length > 0) {
       const createdV = newVariants.map(v => ({ ...v, id: generateId(), productId: id }));
-      setVariants(prev => [...prev, ...createdV]);
       const vInserts = createdV.map(v => ({
         id: v.id, product_id: id, name: v.name, sku: v.sku, stock: v.stock,
         low_stock_threshold: v.lowStockThreshold, cost_price_override: v.costPriceOverride,
         sale_price_override: v.salePriceOverride
       }));
-      supabase.from('product_variants').insert(vInserts).then();
+      supabase.from('product_variants').insert(vInserts).then(({ error }) => {
+        if (!error) setVariants(prev => [...prev, ...createdV]);
+      });
     }
     return newP;
   }, []);
 
   const updateProduct = useCallback((p: Product) => {
-    setProducts(prev => prev.map(x => x.id === p.id ? p : x));
     supabase.from('products').update({
       name: p.name, sku: p.sku, category: p.category, sale_price: p.salePrice,
       cost_price: p.costPrice, notes: p.notes, active: p.active
-    }).eq('id', p.id).then();
+    }).eq('id', p.id).then(({ error }) => {
+      if (error) {
+        console.error("Ürün güncelleme DB hatası:", error);
+        toast.error("DB Güncelleme Hatası: " + error.message);
+      } else {
+        setProducts(prev => prev.map(x => x.id === p.id ? p : x));
+      }
+    });
   }, []);
 
   const deleteProduct = useCallback((id: string) => {
-    setProducts(prev => prev.filter(x => x.id !== id));
-    setVariants(prev => prev.filter(x => x.productId !== id));
-    supabase.from('products').delete().eq('id', id).then();
+    supabase.from('products').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error("Ürün silme DB hatası:", error);
+        toast.error("DB Silme Hatası: " + error.message);
+      } else {
+        setProducts(prev => prev.filter(x => x.id !== id));
+        setVariants(prev => prev.filter(x => x.productId !== id));
+      }
+    });
   }, []);
 
   const deleteProducts = useCallback((ids: string[]) => {
-    const idSet = new Set(ids);
-    setProducts(prev => prev.filter(x => !idSet.has(x.id)));
-    setVariants(prev => prev.filter(x => !idSet.has(x.productId)));
-    supabase.from('products').delete().in('id', ids).then();
+    supabase.from('products').delete().in('id', ids).then(({ error }) => {
+      if (error) {
+        toast.error("DB Toplu Silme Hatası: " + error.message);
+      } else {
+        const idSet = new Set(ids);
+        setProducts(prev => prev.filter(x => !idSet.has(x.id)));
+        setVariants(prev => prev.filter(x => !idSet.has(x.productId)));
+      }
+    });
   }, []);
 
   const addVariant = useCallback((v: Omit<ProductVariant, 'id'>) => {
     const id = generateId();
     const newV: ProductVariant = { ...v, id };
-    setVariants(prev => [...prev, newV]);
     supabase.from('product_variants').insert({
       id, product_id: v.productId, name: v.name, sku: v.sku, stock: v.stock,
       low_stock_threshold: v.lowStockThreshold, cost_price_override: v.costPriceOverride,
       sale_price_override: v.salePriceOverride
-    }).then();
+    }).then(({ error }) => {
+      if (error) {
+        toast.error("Varyant Ekleme DB Hatası: " + error.message);
+      } else {
+        setVariants(prev => [...prev, newV]);
+      }
+    });
     return newV;
   }, []);
 
   const updateVariant = useCallback((v: ProductVariant) => {
-    setVariants(prev => prev.map(x => x.id === v.id ? v : x));
     supabase.from('product_variants').update({
       name: v.name, sku: v.sku, stock: v.stock, low_stock_threshold: v.lowStockThreshold,
-      cost_price_override: v.cost_price_override, sale_price_override: v.sale_price_override
-    }).eq('id', v.id).then();
+      cost_price_override: v.costPriceOverride, sale_price_override: v.salePriceOverride
+    }).eq('id', v.id).then(({ error }) => {
+      if (error) {
+        toast.error("Varyant Güncelleme DB Hatası: " + error.message);
+      } else {
+        setVariants(prev => prev.map(x => x.id === v.id ? v : x));
+      }
+    });
   }, []);
 
   const deleteVariant = useCallback((id: string) => {
-    setVariants(prev => prev.filter(x => x.id !== id));
-    supabase.from('product_variants').delete().eq('id', id).then();
+    supabase.from('product_variants').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        toast.error("Varyant Silme DB Hatası: " + error.message);
+      } else {
+        setVariants(prev => prev.filter(x => x.id !== id));
+      }
+    });
   }, []);
 
+  // --- ORDERS ---
   const addOrder = useCallback((o: Omit<Order, 'id' | 'orderNumber' | 'createdAt'> & { orderNumber?: string }) => {
     const id = generateId();
     const orderNumber = o.orderNumber && o.orderNumber.trim() ? o.orderNumber.trim() : generateOrderNumber();
@@ -459,36 +438,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const codFee = o.codFee ?? (paymentMethod === 'kapida_odeme' ? 100 : 0);
     const cancellationReason = o.cancellationReason || '';
     const newO: Order = { ...o, id, orderNumber, paymentMethod, codFee, cancellationReason, createdAt };
-    setLocalOrderMeta(id, { paymentMethod, codFee, cancellationReason });
-    setVariants(prev => prev.map(v => {
-      const item = newO.items.find(i => i.variantId === v.id);
-      return item ? { ...v, stock: v.stock - item.quantity } : v;
-    }));
-    setOrders(prev => [newO, ...prev]);
-    const basePayload: any = {
+
+    const payload: any = {
       id, order_number: orderNumber, tax_rate: o.taxRate, shipping_cost: o.shippingCost,
       packaging_cost: o.packagingCost, payment_commission_rate: o.paymentCommissionRate,
       payment_commission_fixed: o.paymentCommissionFixed, shopify_commission_rate: o.shopifyCommissionRate,
       shopify_commission_fixed: o.shopifyCommissionFixed, discount_amount: o.discountAmount,
       discount_rate: o.discountRate, extra_expense: o.extraExpense, notes: o.notes,
       order_date: o.orderDate, payment_status: o.paymentStatus || 'beklemede', order_status: o.orderStatus || 'yeni',
-      city: o.city, district: o.district
-    };
-
-    const fullPayload = {
-      ...basePayload,
-      payment_method: paymentMethod,
-      cod_fee: codFee,
-      cancellation_reason: cancellationReason
+      city: o.city, district: o.district, payment_method: paymentMethod, cod_fee: codFee, cancellation_reason: cancellationReason
     };
 
     const saveToSupabase = async () => {
       try {
-        // Try full insert first, fallback to basePayload if schema missing columns
-        let { error } = await supabase.from('orders').insert(fullPayload);
+        let { error } = await supabase.from('orders').insert(payload);
         if (error) {
-          const fallbackRes = await supabase.from('orders').insert(basePayload);
-          if (fallbackRes.error) console.error("Supabase insert fallback error:", fallbackRes.error);
+          console.error("Supabase insert error:", error);
+          toast.error("Sipariş DB Kayıt Hatası: " + error.message);
+          return;
         }
 
         if (o.items.length > 0) {
@@ -505,8 +472,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
           }
         }
-      } catch (e) {
+
+        setVariants(prev => prev.map(v => {
+          const item = newO.items.find(i => i.variantId === v.id);
+          return item ? { ...v, stock: v.stock - item.quantity } : v;
+        }));
+        setOrders(prev => [newO, ...prev]);
+        toast.success("Sipariş kaydedildi");
+      } catch (e: any) {
         console.error("Database sync error:", e);
+        toast.error("Sipariş Kayıt Hatası: " + e.message);
       }
     };
     saveToSupabase();
@@ -515,59 +490,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateOrder = useCallback((o: Order) => {
-    setLocalOrderMeta(o.id, { paymentMethod: o.paymentMethod, codFee: o.codFee, cancellationReason: o.cancellationReason });
-
-    setOrders(prev => {
-      const oldOrder = prev.find(x => x.id === o.id);
-      if (oldOrder) {
-        const wasReturnedOrCanceled = oldOrder.orderStatus === 'iade' || oldOrder.orderStatus === 'iptal' || oldOrder.paymentStatus === 'iade' || oldOrder.paymentStatus === 'iptal';
-        const isReturnedOrCanceled = o.orderStatus === 'iade' || o.orderStatus === 'iptal' || o.paymentStatus === 'iade' || o.paymentStatus === 'iptal';
-
-        if (!wasReturnedOrCanceled && isReturnedOrCanceled) {
-          setVariants(vPrev => vPrev.map(v => {
-            const item = o.items.find(i => i.variantId === v.id);
-            return item ? { ...v, stock: v.stock + item.quantity } : v;
-          }));
-          o.items.forEach(async item => {
-            const latestV = await supabase.from('product_variants').select('stock').eq('id', item.variantId).single();
-            if (latestV.data) supabase.from('product_variants').update({ stock: latestV.data.stock + item.quantity }).eq('id', item.variantId).then();
-          });
-        } else if (wasReturnedOrCanceled && !isReturnedOrCanceled) {
-          setVariants(vPrev => vPrev.map(v => {
-            const item = o.items.find(i => i.variantId === v.id);
-            return item ? { ...v, stock: v.stock - item.quantity } : v;
-          }));
-          o.items.forEach(async item => {
-            const latestV = await supabase.from('product_variants').select('stock').eq('id', item.variantId).single();
-            if (latestV.data) supabase.from('product_variants').update({ stock: latestV.data.stock - item.quantity }).eq('id', item.variantId).then();
-          });
-        }
-      }
-      return prev.map(x => x.id === o.id ? o : x);
-    });
-
-    const basePayload: any = {
+    const payload = {
       order_number: o.orderNumber,
       order_date: o.orderDate,
       tax_rate: o.taxRate, shipping_cost: o.shippingCost, payment_status: o.paymentStatus || 'beklemede',
       order_status: o.orderStatus || 'yeni', notes: o.notes, city: o.city, district: o.district,
-      cancellation_reason: o.cancellationReason || ''
-    };
-
-    const fullPayload = {
-      ...basePayload,
+      cancellation_reason: o.cancellationReason || '',
       payment_method: o.paymentMethod || 'kredi_karti',
       cod_fee: o.codFee ?? 0
     };
 
     const updateInSupabase = async () => {
       try {
-        let { error } = await supabase.from('orders').update(fullPayload).eq('id', o.id);
+        let { error } = await supabase.from('orders').update(payload).eq('id', o.id);
         if (error) {
-          await supabase.from('orders').update(basePayload).eq('id', o.id);
+          toast.error("Sipariş DB Güncelleme Hatası: " + error.message);
+          return;
         }
-      } catch (e) {
+
+        setOrders(prev => {
+          const oldOrder = prev.find(x => x.id === o.id);
+          if (oldOrder) {
+            const wasReturnedOrCanceled = oldOrder.orderStatus === 'iade' || oldOrder.orderStatus === 'iptal' || oldOrder.paymentStatus === 'iade' || oldOrder.paymentStatus === 'iptal';
+            const isReturnedOrCanceled = o.orderStatus === 'iade' || o.orderStatus === 'iptal' || o.paymentStatus === 'iade' || o.paymentStatus === 'iptal';
+
+            if (!wasReturnedOrCanceled && isReturnedOrCanceled) {
+              setVariants(vPrev => vPrev.map(v => {
+                const item = o.items.find(i => i.variantId === v.id);
+                return item ? { ...v, stock: v.stock + item.quantity } : v;
+              }));
+              o.items.forEach(async item => {
+                const latestV = await supabase.from('product_variants').select('stock').eq('id', item.variantId).single();
+                if (latestV.data) supabase.from('product_variants').update({ stock: latestV.data.stock + item.quantity }).eq('id', item.variantId).then();
+              });
+            } else if (wasReturnedOrCanceled && !isReturnedOrCanceled) {
+              setVariants(vPrev => vPrev.map(v => {
+                const item = o.items.find(i => i.variantId === v.id);
+                return item ? { ...v, stock: v.stock - item.quantity } : v;
+              }));
+              o.items.forEach(async item => {
+                const latestV = await supabase.from('product_variants').select('stock').eq('id', item.variantId).single();
+                if (latestV.data) supabase.from('product_variants').update({ stock: latestV.data.stock - item.quantity }).eq('id', item.variantId).then();
+              });
+            }
+          }
+          return prev.map(x => x.id === o.id ? o : x);
+        });
+        toast.success("Sipariş güncellendi");
+      } catch (e: any) {
         console.error("Database update error:", e);
+        toast.error("Güncelleme Hatası: " + e.message);
       }
     };
     updateInSupabase();
@@ -580,28 +552,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const order = prev.find(x => x.id === id);
       if (order) {
         isAlreadyCancelled = order.orderStatus === 'iptal' || order.orderStatus === 'iade' || order.paymentStatus === 'iptal' || order.paymentStatus === 'iade';
-        
-        // Sadece aktif (iptal/iade edilmemiş) siparişler silindiğinde stoklar geri iade edilir.
-        // İptal edilmiş siparişte stoklar önceden zaten yüklendiği için tekrar eklenmez.
-        if (!isAlreadyCancelled) {
-          setVariants(vPrev => vPrev.map(v => {
-            const item = order.items.find(i => i.variantId === v.id);
-            return item ? { ...v, stock: v.stock + item.quantity } : v;
-          }));
-        }
       }
-      return prev.filter(x => x.id !== id);
+      return prev;
     });
     
-    // Veritabanı işlemleri
-    supabase.from('order_items').select('*').eq('order_id', id).then(({ data }) => {
-       if (data && !isAlreadyCancelled) {
-         data.forEach(async item => {
-            const v = await supabase.from('product_variants').select('stock').eq('id', item.variant_id).single();
-            if (v.data) supabase.from('product_variants').update({ stock: v.data.stock + item.quantity }).eq('id', item.variant_id).then();
-         });
-       }
-       supabase.from('orders').delete().eq('id', id).then();
+    supabase.from('orders').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        toast.error("Sipariş DB Silme Hatası: " + error.message);
+      } else {
+        setOrders(prev => {
+          const order = prev.find(x => x.id === id);
+          if (order && !isAlreadyCancelled) {
+            setVariants(vPrev => vPrev.map(v => {
+              const item = order.items.find(i => i.variantId === v.id);
+              return item ? { ...v, stock: v.stock + item.quantity } : v;
+            }));
+          }
+          return prev.filter(x => x.id !== id);
+        });
+        toast.success("Sipariş silindi");
+      }
     });
   }, []);
 
@@ -614,36 +584,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newE: Expense = { ...e, id, createdAt };
-    setExpenses(prev => [newE, ...prev]);
-    
+
     supabase.from('expenses').insert({
       id, date: e.date, category_id: e.categoryId || null, description: e.description,
       amount: e.amount, recurring: e.recurring, frequency: e.frequency, notes: e.notes, created_at: createdAt
     }).then(({ error }) => {
       if (error) {
-         console.error("Gider ekleme hatası:", error);
-         toast.error("Gider kaydedilemedi: " + error.message);
+        console.error("Gider ekleme hatası:", error);
+        toast.error("Gider DB Kayıt Hatası: " + error.message);
+      } else {
+        setExpenses(prev => [newE, ...prev]);
+        toast.success("Gider eklendi");
       }
     });
   }, []);
 
   const updateExpense = useCallback((e: Expense) => {
-    setExpenses(prev => prev.map(x => x.id === e.id ? e : x));
     supabase.from('expenses').update({
       date: e.date, category_id: e.categoryId || null, description: e.description,
       amount: e.amount, recurring: e.recurring, frequency: e.frequency, notes: e.notes
-    }).eq('id', e.id).then();
+    }).eq('id', e.id).then(({ error }) => {
+      if (error) {
+        toast.error("Gider Güncelleme DB Hatası: " + error.message);
+      } else {
+        setExpenses(prev => prev.map(x => x.id === e.id ? e : x));
+        toast.success("Gider güncellendi");
+      }
+    });
   }, []);
 
   const deleteExpense = useCallback((id: string) => {
-    setExpenses(prev => prev.filter(x => x.id !== id));
-    supabase.from('expenses').delete().eq('id', id).then();
+    supabase.from('expenses').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        toast.error("Gider Silme DB Hatası: " + error.message);
+      } else {
+        setExpenses(prev => prev.filter(x => x.id !== id));
+        toast.success("Gider silindi");
+      }
+    });
   }, []);
 
   const deleteExpenses = useCallback((ids: string[]) => {
-    const idSet = new Set(ids);
-    setExpenses(prev => prev.filter(x => !idSet.has(x.id)));
-    supabase.from('expenses').delete().in('id', ids).then();
+    supabase.from('expenses').delete().in('id', ids).then(({ error }) => {
+      if (error) {
+        toast.error("Gider Toplu Silme Hatası: " + error.message);
+      } else {
+        const idSet = new Set(ids);
+        setExpenses(prev => prev.filter(x => !idSet.has(x.id)));
+        toast.success("Giderler silindi");
+      }
+    });
   }, []);
 
   // --- COMPETITOR ADS ---
@@ -651,36 +641,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newAd: CompetitorAd = { ...a, id, createdAt };
-    setCompetitorAds(prev => [newAd, ...prev]);
-    
+
     supabase.from('competitor_ads').insert({
       id, product_name: a.productName, category: a.category, competitors: a.competitors,
       ad_count: a.adCount, ad_type: a.adType, in_stock: a.inStock, notes: a.notes, created_at: createdAt
     }).then(({ error }) => {
       if (error) {
-         console.error("Rakip reklamı ekleme hatası:", error);
-         toast.error("Reklam kaydedilemedi: " + error.message);
+        console.error("Rakip reklamı ekleme hatası:", error);
+        toast.error("Reklam DB Kayıt Hatası: " + error.message);
+      } else {
+        setCompetitorAds(prev => [newAd, ...prev]);
+        toast.success("Reklam eklendi");
       }
     });
   }, []);
 
   const updateCompetitorAd = useCallback((a: CompetitorAd) => {
-    setCompetitorAds(prev => prev.map(x => x.id === a.id ? a : x));
     supabase.from('competitor_ads').update({
       product_name: a.productName, category: a.category, competitors: a.competitors,
       ad_count: a.adCount, ad_type: a.adType, in_stock: a.inStock, notes: a.notes
-    }).eq('id', a.id).then();
+    }).eq('id', a.id).then(({ error }) => {
+      if (error) {
+        toast.error("Reklam DB Güncelleme Hatası: " + error.message);
+      } else {
+        setCompetitorAds(prev => prev.map(x => x.id === a.id ? a : x));
+        toast.success("Reklam güncellendi");
+      }
+    });
   }, []);
 
   const deleteCompetitorAd = useCallback((id: string) => {
-    setCompetitorAds(prev => prev.filter(x => x.id !== id));
-    supabase.from('competitor_ads').delete().eq('id', id).then();
+    supabase.from('competitor_ads').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        toast.error("Reklam DB Silme Hatası: " + error.message);
+      } else {
+        setCompetitorAds(prev => prev.filter(x => x.id !== id));
+        toast.success("Reklam silindi");
+      }
+    });
   }, []);
 
   const deleteCompetitorAds = useCallback((ids: string[]) => {
-    const idSet = new Set(ids);
-    setCompetitorAds(prev => prev.filter(x => !idSet.has(x.id)));
-    supabase.from('competitor_ads').delete().in('id', ids).then();
+    supabase.from('competitor_ads').delete().in('id', ids).then(({ error }) => {
+      if (error) {
+        toast.error("Reklam Toplu Silme Hatası: " + error.message);
+      } else {
+        const idSet = new Set(ids);
+        setCompetitorAds(prev => prev.filter(x => !idSet.has(x.id)));
+        toast.success("Reklamlar silindi");
+      }
+    });
   }, []);
 
   // --- COMPETITOR PROFILES ---
@@ -688,8 +698,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newP: CompetitorProfile = { ...p, id, createdAt };
-    setCompetitorProfiles(prev => [newP, ...prev]);
-    
+
     supabase.from('competitor_profiles').insert({
       id, competitor_name: p.competitorName, creative_count: p.creativeCount,
       price_range: p.priceRange, strategy: p.strategy, products_note: p.productsNote,
@@ -697,30 +706,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
       created_at: createdAt
     }).then(({ error }) => {
       if (error) {
-         console.error("Rakip profili ekleme hatası:", error);
-         toast.error("Profil kaydedilemedi: " + error.message);
+        console.error("Rakip profili ekleme hatası:", error);
+        toast.error("Profil DB Kayıt Hatası: " + error.message);
+      } else {
+        setCompetitorProfiles(prev => [newP, ...prev]);
+        toast.success("Profil eklendi");
       }
     });
   }, []);
 
   const updateCompetitorProfile = useCallback((p: CompetitorProfile) => {
-    setCompetitorProfiles(prev => prev.map(x => x.id === p.id ? p : x));
     supabase.from('competitor_profiles').update({
       competitor_name: p.competitorName, creative_count: p.creativeCount,
       price_range: p.priceRange, strategy: p.strategy, products_note: p.productsNote,
       ad_library_url: p.adLibraryUrl, website_url: p.websiteUrl, instagram_url: p.instagramUrl
-    }).eq('id', p.id).then();
+    }).eq('id', p.id).then(({ error }) => {
+      if (error) {
+        toast.error("Profil DB Güncelleme Hatası: " + error.message);
+      } else {
+        setCompetitorProfiles(prev => prev.map(x => x.id === p.id ? p : x));
+        toast.success("Profil güncellendi");
+      }
+    });
   }, []);
 
   const deleteCompetitorProfile = useCallback((id: string) => {
-    setCompetitorProfiles(prev => prev.filter(x => x.id !== id));
-    supabase.from('competitor_profiles').delete().eq('id', id).then();
+    supabase.from('competitor_profiles').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        toast.error("Profil DB Silme Hatası: " + error.message);
+      } else {
+        setCompetitorProfiles(prev => prev.filter(x => x.id !== id));
+        toast.success("Profil silindi");
+      }
+    });
   }, []);
 
   const deleteCompetitorProfiles = useCallback((ids: string[]) => {
-    const idSet = new Set(ids);
-    setCompetitorProfiles(prev => prev.filter(x => !idSet.has(x.id)));
-    supabase.from('competitor_profiles').delete().in('id', ids).then();
+    supabase.from('competitor_profiles').delete().in('id', ids).then(({ error }) => {
+      if (error) {
+        toast.error("Profil Toplu Silme Hatası: " + error.message);
+      } else {
+        const idSet = new Set(ids);
+        setCompetitorProfiles(prev => prev.filter(x => !idSet.has(x.id)));
+        toast.success("Profiller silindi");
+      }
+    });
   }, []);
 
   // --- SETTINGS ---
@@ -743,24 +773,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           };
 
           supabase.from('settings').update(updatePayload).eq('id', data.id).then(({ error }) => {
-            if (error) console.error("Settings DB update error:", error);
+            if (error) console.error("Ayarlar DB Güncelleme Hatası:", error);
           });
         }
       });
 
-      // Synchronize Expense Categories
       if (s.expenseCategories !== undefined) {
-         const prevIds = prev.expenseCategories.map(c => c.id);
-         const nextIds = s.expenseCategories.map(c => c.id);
-         const toDelete = prevIds.filter(id => !nextIds.includes(id));
-         const toUpsert = s.expenseCategories.map(c => ({ id: c.id, name: c.name, color: c.color }));
-         
-         if (toDelete.length > 0) {
-            supabase.from('expense_categories').delete().in('id', toDelete).then();
-         }
-         if (toUpsert.length > 0) {
-            supabase.from('expense_categories').upsert(toUpsert).then();
-         }
+        const prevIds = prev.expenseCategories.map(c => c.id);
+        const nextIds = s.expenseCategories.map(c => c.id);
+        const toDelete = prevIds.filter(id => !nextIds.includes(id));
+        const toUpsert = s.expenseCategories.map(c => ({ id: c.id, name: c.name, color: c.color }));
+        
+        if (toDelete.length > 0) {
+          supabase.from('expense_categories').delete().in('id', toDelete).then();
+        }
+        if (toUpsert.length > 0) {
+          supabase.from('expense_categories').upsert(toUpsert).then();
+        }
       }
 
       return next;
@@ -772,7 +801,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newT: CashTransaction = { ...t, id, createdAt };
-    setCashTransactions(prev => [newT, ...prev]);
 
     supabase.from('cash_ledger').insert({
       id, date: t.date, type: t.type, name: t.name,
@@ -780,151 +808,153 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }).then(({ error }) => {
       if (error) {
         console.error("Mali işlem ekleme hatası:", error);
-        toast.error("İşlem kaydedilemedi: " + error.message);
+        toast.error("İşlem DB Kayıt Hatası: " + error.message);
+      } else {
+        setCashTransactions(prev => [newT, ...prev]);
+        toast.success("İşlem kaydedildi");
       }
     });
   }, []);
 
   const updateCashTransaction = useCallback((t: CashTransaction) => {
-    setCashTransactions(prev => prev.map(x => x.id === t.id ? t : x));
     supabase.from('cash_ledger').update({
       date: t.date, type: t.type, name: t.name,
       amount: t.amount, description: t.description
     }).eq('id', t.id).then(({ error }) => {
       if (error) {
         console.error("Mali işlem güncelleme hatası:", error);
-        toast.error("İşlem güncellenemedi: " + error.message);
+        toast.error("İşlem DB Güncelleme Hatası: " + error.message);
+      } else {
+        setCashTransactions(prev => prev.map(x => x.id === t.id ? t : x));
+        toast.success("İşlem güncellendi");
       }
     });
   }, []);
 
   const deleteCashTransaction = useCallback((id: string) => {
-    setCashTransactions(prev => prev.filter(x => x.id !== id));
     supabase.from('cash_ledger').delete().eq('id', id).then(({ error }) => {
       if (error) {
         console.error("Mali işlem silme hatası:", error);
-        toast.error("İşlem silinemedi: " + error.message);
+        toast.error("İşlem DB Silme Hatası: " + error.message);
+      } else {
+        setCashTransactions(prev => prev.filter(x => x.id !== id));
+        toast.success("İşlem silindi");
       }
     });
   }, []);
 
   const deleteCashTransactions = useCallback((ids: string[]) => {
-    const idSet = new Set(ids);
-    setCashTransactions(prev => prev.filter(x => !idSet.has(x.id)));
     supabase.from('cash_ledger').delete().in('id', ids).then(({ error }) => {
       if (error) {
         console.error("Mali işlem toplu silme hatası:", error);
-        toast.error("İşlemler silinemedi: " + error.message);
+        toast.error("İşlemler DB Silme Hatası: " + error.message);
+      } else {
+        const idSet = new Set(ids);
+        setCashTransactions(prev => prev.filter(x => !idSet.has(x.id)));
+        toast.success("İşlemler silindi");
       }
     });
   }, []);
 
-  // --- FINANCIAL MANAGEMENT HANDLERS (SUPABASE CONNECTED) ---
+  // --- BANK ACCOUNTS ---
   const addBankAccount = useCallback((b: Omit<BankAccount, 'id' | 'createdAt'>) => {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newB: BankAccount = { ...b, id, createdAt };
-    setBankAccounts(prev => [...prev, newB]);
 
     supabase.from('bank_accounts').insert({
       id, name: b.name, bank_name: b.bankName, iban: b.iban || null, balance: b.balance, color: b.color || null, created_at: createdAt
     }).then(({ error }) => {
-      if (error) console.error("Banka hesabı DB ekleme hatası:", error);
+      if (error) {
+        console.error("Banka hesabı DB ekleme hatası:", error);
+        toast.error("Banka Hesabı DB Hatası: " + error.message);
+      } else {
+        setBankAccounts(prev => [...prev, newB]);
+        toast.success("Banka hesabı eklendi");
+      }
     });
-
-    toast.success("Banka hesabı eklendi");
   }, []);
 
   const updateBankAccount = useCallback((b: BankAccount) => {
-    setBankAccounts(prev => prev.map(x => x.id === b.id ? b : x));
-
     supabase.from('bank_accounts').update({
       name: b.name, bank_name: b.bankName, iban: b.iban || null, balance: b.balance, color: b.color || null
     }).eq('id', b.id).then(({ error }) => {
-      if (error) console.error("Banka hesabı DB güncelleme hatası:", error);
+      if (error) {
+        console.error("Banka hesabı DB güncelleme hatası:", error);
+        toast.error("Banka Hesabı Güncelleme Hatası: " + error.message);
+      } else {
+        setBankAccounts(prev => prev.map(x => x.id === b.id ? b : x));
+        toast.success("Banka hesabı güncellendi");
+      }
     });
-
-    toast.success("Banka hesabı güncellendi");
   }, []);
 
   const deleteBankAccount = useCallback((id: string) => {
-    setBankAccounts(prev => prev.filter(x => x.id !== id));
-
     supabase.from('bank_accounts').delete().eq('id', id).then(({ error }) => {
-      if (error) console.error("Banka hesabı DB silme hatası:", error);
+      if (error) {
+        console.error("Banka hesabı DB silme hatası:", error);
+        toast.error("Banka Hesabı Silme Hatası: " + error.message);
+      } else {
+        setBankAccounts(prev => prev.filter(x => x.id !== id));
+        toast.success("Banka hesabı silindi");
+      }
     });
-
-    toast.success("Banka hesabı silindi");
   }, []);
 
+  // --- CREDIT CARDS ---
   const addCreditCard = useCallback((c: Omit<CreditCard, 'id' | 'createdAt'>) => {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newC: CreditCard = { ...c, id, createdAt };
-    setCreditCards(prev => [...prev, newC]);
 
     supabase.from('credit_cards').insert({
       id, name: c.name, bank_name: c.bankName, card_number_last4: c.cardNumberLast4 || null,
       total_limit: c.totalLimit, current_debt: c.currentDebt, cutoff_day: c.cutoffDay || 15,
       due_day: c.dueDay || 25, color: c.color || null, created_at: createdAt
     }).then(({ error }) => {
-      if (error) console.error("Kredi kartı DB ekleme hatası:", error);
+      if (error) {
+        console.error("Kredi kartı DB ekleme hatası:", error);
+        toast.error("Kredi Kartı DB Hatası: " + error.message);
+      } else {
+        setCreditCards(prev => [...prev, newC]);
+        toast.success("Kredi kartı eklendi");
+      }
     });
-
-    toast.success("Kredi kartı eklendi");
   }, []);
 
   const updateCreditCard = useCallback((c: CreditCard) => {
-    setCreditCards(prev => prev.map(x => x.id === c.id ? c : x));
-
     supabase.from('credit_cards').update({
       name: c.name, bank_name: c.bankName, card_number_last4: c.cardNumberLast4 || null,
       total_limit: c.totalLimit, current_debt: c.currentDebt, cutoff_day: c.cutoffDay || 15,
       due_day: c.dueDay || 25, color: c.color || null
     }).eq('id', c.id).then(({ error }) => {
-      if (error) console.error("Kredi kartı DB güncelleme hatası:", error);
+      if (error) {
+        console.error("Kredi kartı DB güncelleme hatası:", error);
+        toast.error("Kredi Kartı Güncelleme Hatası: " + error.message);
+      } else {
+        setCreditCards(prev => prev.map(x => x.id === c.id ? c : x));
+        toast.success("Kredi kartı güncellendi");
+      }
     });
-
-    toast.success("Kredi kartı güncellendi");
   }, []);
 
   const deleteCreditCard = useCallback((id: string) => {
-    setCreditCards(prev => prev.filter(x => x.id !== id));
-
     supabase.from('credit_cards').delete().eq('id', id).then(({ error }) => {
-      if (error) console.error("Kredi kartı DB silme hatası:", error);
+      if (error) {
+        console.error("Kredi kartı DB silme hatası:", error);
+        toast.error("Kredi Kartı Silme Hatası: " + error.message);
+      } else {
+        setCreditCards(prev => prev.filter(x => x.id !== id));
+        toast.success("Kredi kartı silindi");
+      }
     });
-
-    toast.success("Kredi kartı silindi");
   }, []);
 
+  // --- SUPPLIER INVOICES ---
   const addSupplierInvoice = useCallback((i: Omit<SupplierInvoice, 'id' | 'createdAt'>) => {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newI: SupplierInvoice = { ...i, id, createdAt };
-    setSupplierInvoices(prev => [newI, ...prev]);
-
-    if (i.sourceAccountId) {
-      if (i.paymentMethod === 'bank_account') {
-        setBankAccounts(prev => prev.map(b => {
-          if (b.id === i.sourceAccountId) {
-            const newBal = b.balance - i.amount;
-            supabase.from('bank_accounts').update({ balance: newBal }).eq('id', b.id).then();
-            return { ...b, balance: newBal };
-          }
-          return b;
-        }));
-      } else if (i.paymentMethod === 'credit_card') {
-        setCreditCards(prev => prev.map(c => {
-          if (c.id === i.sourceAccountId) {
-            const newDebt = c.currentDebt + i.amount;
-            supabase.from('credit_cards').update({ current_debt: newDebt }).eq('id', c.id).then();
-            return { ...c, currentDebt: newDebt };
-          }
-          return c;
-        }));
-      }
-    }
 
     supabase.from('supplier_invoices').insert({
       id, date: i.date, supplier_name: i.supplierName, invoice_type: i.invoiceType || 'product',
@@ -934,15 +964,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
       invoice_file_name: i.invoiceFileName || null, invoice_status: i.invoiceStatus,
       notes: i.notes || null, created_at: createdAt
     }).then(({ error }) => {
-      if (error) console.error("Tedarik faturası DB ekleme hatası:", error);
-    });
+      if (error) {
+        console.error("Tedarik faturası DB ekleme hatası:", error);
+        toast.error("Tedarik Faturası DB Hatası: " + error.message);
+      } else {
+        setSupplierInvoices(prev => [newI, ...prev]);
 
-    toast.success("Tedarik alım kaydı eklendi");
+        if (i.sourceAccountId) {
+          if (i.paymentMethod === 'bank_account') {
+            setBankAccounts(prev => prev.map(b => {
+              if (b.id === i.sourceAccountId) {
+                const newBal = b.balance - i.amount;
+                supabase.from('bank_accounts').update({ balance: newBal }).eq('id', b.id).then();
+                return { ...b, balance: newBal };
+              }
+              return b;
+            }));
+          } else if (i.paymentMethod === 'credit_card') {
+            setCreditCards(prev => prev.map(c => {
+              if (c.id === i.sourceAccountId) {
+                const newDebt = c.currentDebt + i.amount;
+                supabase.from('credit_cards').update({ current_debt: newDebt }).eq('id', c.id).then();
+                return { ...c, currentDebt: newDebt };
+              }
+              return c;
+            }));
+          }
+        }
+        toast.success("Tedarik alım kaydı eklendi");
+      }
+    });
   }, []);
 
   const updateSupplierInvoice = useCallback((i: SupplierInvoice) => {
-    setSupplierInvoices(prev => prev.map(x => x.id === i.id ? i : x));
-
     supabase.from('supplier_invoices').update({
       date: i.date, supplier_name: i.supplierName, invoice_type: i.invoiceType || 'product',
       items_summary: i.itemsSummary, items: i.items || [], subtotal: i.subtotal || 0,
@@ -951,27 +1005,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       invoice_file_name: i.invoiceFileName || null, invoice_status: i.invoiceStatus,
       notes: i.notes || null
     }).eq('id', i.id).then(({ error }) => {
-      if (error) console.error("Tedarik faturası DB güncelleme hatası:", error);
+      if (error) {
+        console.error("Tedarik faturası DB güncelleme hatası:", error);
+        toast.error("Tedarik Faturası Güncelleme Hatası: " + error.message);
+      } else {
+        setSupplierInvoices(prev => prev.map(x => x.id === i.id ? i : x));
+        toast.success("Tedarik kaydı güncellendi");
+      }
     });
-
-    toast.success("Tedarik kaydı güncellendi");
   }, []);
 
   const deleteSupplierInvoice = useCallback((id: string) => {
-    setSupplierInvoices(prev => prev.filter(x => x.id !== id));
-
     supabase.from('supplier_invoices').delete().eq('id', id).then(({ error }) => {
-      if (error) console.error("Tedarik faturası DB silme hatası:", error);
+      if (error) {
+        console.error("Tedarik faturası DB silme hatası:", error);
+        toast.error("Tedarik Kaydı Silme Hatası: " + error.message);
+      } else {
+        setSupplierInvoices(prev => prev.filter(x => x.id !== id));
+        toast.success("Tedarik kaydı silindi");
+      }
     });
-
-    toast.success("Tedarik kaydı silindi");
   }, []);
 
+  // --- EXPECTED PAYOUTS ---
   const addExpectedPayout = useCallback((p: Omit<ExpectedPayout, 'id' | 'createdAt'>) => {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newP: ExpectedPayout = { ...p, id, createdAt };
-    setExpectedPayouts(prev => [newP, ...prev]);
 
     supabase.from('expected_payouts').insert({
       id, order_id: p.orderId || null, order_number: p.orderNumber || null,
@@ -979,129 +1039,155 @@ export function AppProvider({ children }: { children: ReactNode }) {
       expected_payout_date: p.expectedPayoutDate, status: p.status,
       received_account_id: p.receivedAccountId || null, notes: p.notes || null, created_at: createdAt
     }).then(({ error }) => {
-      if (error) console.error("Alacak DB ekleme hatası:", error);
+      if (error) {
+        console.error("Alacak DB ekleme hatası:", error);
+        toast.error("Alacak Kaydı DB Hatası: " + error.message);
+      } else {
+        setExpectedPayouts(prev => [newP, ...prev]);
+        toast.success("Alacak kaydı eklendi");
+      }
     });
-
-    toast.success("Alacak kaydı eklendi");
   }, []);
 
   const completeExpectedPayout = useCallback((id: string, receivedAccountId: string) => {
-    let amountAdded = 0;
-    setExpectedPayouts(prev => prev.map(p => {
-      if (p.id === id) {
-        amountAdded = p.amount;
-        return { ...p, status: 'completed', receivedAccountId };
-      }
-      return p;
-    }));
+    let targetPayout: ExpectedPayout | undefined;
+    setExpectedPayouts(prev => {
+      targetPayout = prev.find(p => p.id === id);
+      return prev;
+    });
 
     supabase.from('expected_payouts').update({
       status: 'completed', received_account_id: receivedAccountId
     }).eq('id', id).then(({ error }) => {
-      if (error) console.error("Alacak DB güncelleme hatası:", error);
-    });
+      if (error) {
+        console.error("Alacak DB güncelleme hatası:", error);
+        toast.error("Alacak Güncelleme Hatası: " + error.message);
+      } else {
+        setExpectedPayouts(prev => prev.map(p => {
+          if (p.id === id) {
+            return { ...p, status: 'completed', receivedAccountId };
+          }
+          return p;
+        }));
 
-    if (receivedAccountId && amountAdded > 0) {
-      setBankAccounts(prev => prev.map(b => {
-        if (b.id === receivedAccountId) {
-          const newBal = b.balance + amountAdded;
-          supabase.from('bank_accounts').update({ balance: newBal }).eq('id', b.id).then();
-          return { ...b, balance: newBal };
+        if (receivedAccountId && targetPayout && targetPayout.amount > 0) {
+          const amt = targetPayout.amount;
+          setBankAccounts(prev => prev.map(b => {
+            if (b.id === receivedAccountId) {
+              const newBal = b.balance + amt;
+              supabase.from('bank_accounts').update({ balance: newBal }).eq('id', b.id).then();
+              return { ...b, balance: newBal };
+            }
+            return b;
+          }));
         }
-        return b;
-      }));
-      toast.success("Alacak hesaba aktarıldı ve banka bakiyesi güncellendi");
-    }
+        toast.success("Alacak hesaba aktarıldı ve banka bakiyesi güncellendi");
+      }
+    });
   }, []);
 
   const deleteExpectedPayout = useCallback((id: string) => {
-    setExpectedPayouts(prev => prev.filter(x => x.id !== id));
-
     supabase.from('expected_payouts').delete().eq('id', id).then(({ error }) => {
-      if (error) console.error("Alacak DB silme hatası:", error);
+      if (error) {
+        console.error("Alacak DB silme hatası:", error);
+        toast.error("Alacak Silme Hatası: " + error.message);
+      } else {
+        setExpectedPayouts(prev => prev.filter(x => x.id !== id));
+        toast.success("Alacak kaydı silindi");
+      }
     });
-
-    toast.success("Alacak kaydı silindi");
   }, []);
 
+  // --- UPCOMING PAYABLES ---
   const addUpcomingPayable = useCallback((u: Omit<UpcomingPayable, 'id' | 'createdAt'>) => {
     const id = generateId();
     const createdAt = new Date().toISOString();
     const newU: UpcomingPayable = { ...u, id, createdAt };
-    setUpcomingPayables(prev => [...prev, newU]);
 
     supabase.from('upcoming_payables').insert({
       id, title: u.title, category: u.category, amount: u.amount,
       due_date: u.dueDate, status: u.status, notes: u.notes || null, created_at: createdAt
     }).then(({ error }) => {
-      if (error) console.error("Ödeme DB ekleme hatası:", error);
+      if (error) {
+        console.error("Ödeme DB ekleme hatası:", error);
+        toast.error("Ödeme Kaydı DB Hatası: " + error.message);
+      } else {
+        setUpcomingPayables(prev => [...prev, newU]);
+        toast.success("Ödeme kaydı eklendi");
+      }
     });
-
-    toast.success("Ödeme kaydı eklendi");
   }, []);
 
   const payUpcomingPayable = useCallback((id: string, paidFromAccountId: string, paymentMethod: 'cash' | 'bank_account' | 'credit_card') => {
-    let targetPayable: UpcomingPayable | null = null;
-
-    setUpcomingPayables(prev => prev.map(u => {
-      if (u.id === id) {
-        targetPayable = u;
-        return { ...u, status: 'paid', paidFromAccountId, paymentMethod };
-      }
-      return u;
-    }));
+    let targetPayable: UpcomingPayable | undefined;
+    setUpcomingPayables(prev => {
+      targetPayable = prev.find(u => u.id === id);
+      return prev;
+    });
 
     supabase.from('upcoming_payables').update({
       status: 'paid', paid_from_account_id: paidFromAccountId || null, payment_method: paymentMethod
     }).eq('id', id).then(({ error }) => {
-      if (error) console.error("Ödeme DB güncelleme hatası:", error);
-    });
-
-    if (targetPayable) {
-      const amt = (targetPayable as UpcomingPayable).amount;
-      const cat = (targetPayable as UpcomingPayable).category;
-
-      if (paymentMethod === 'bank_account' && paidFromAccountId) {
-        setBankAccounts(prev => prev.map(b => {
-          if (b.id === paidFromAccountId) {
-            const newBal = b.balance - amt;
-            supabase.from('bank_accounts').update({ balance: newBal }).eq('id', b.id).then();
-            return { ...b, balance: newBal };
+      if (error) {
+        console.error("Ödeme DB güncelleme hatası:", error);
+        toast.error("Ödeme Güncelleme Hatası: " + error.message);
+      } else {
+        setUpcomingPayables(prev => prev.map(u => {
+          if (u.id === id) {
+            return { ...u, status: 'paid', paidFromAccountId, paymentMethod };
           }
-          return b;
+          return u;
         }));
-        if (cat === 'kredi_karti') {
-          setCreditCards(prev => prev.map(c => {
-            if (c.id === paidFromAccountId || c.name.toLowerCase().includes('garanti')) {
-              const newDebt = Math.max(0, c.currentDebt - amt);
-              supabase.from('credit_cards').update({ current_debt: newDebt }).eq('id', c.id).then();
-              return { ...c, currentDebt: newDebt };
+
+        if (targetPayable) {
+          const amt = targetPayable.amount;
+          const cat = targetPayable.category;
+
+          if (paymentMethod === 'bank_account' && paidFromAccountId) {
+            setBankAccounts(prev => prev.map(b => {
+              if (b.id === paidFromAccountId) {
+                const newBal = b.balance - amt;
+                supabase.from('bank_accounts').update({ balance: newBal }).eq('id', b.id).then();
+                return { ...b, balance: newBal };
+              }
+              return b;
+            }));
+            if (cat === 'kredi_karti') {
+              setCreditCards(prev => prev.map(c => {
+                if (c.id === paidFromAccountId || c.name.toLowerCase().includes('garanti')) {
+                  const newDebt = Math.max(0, c.currentDebt - amt);
+                  supabase.from('credit_cards').update({ current_debt: newDebt }).eq('id', c.id).then();
+                  return { ...c, currentDebt: newDebt };
+                }
+                return c;
+              }));
             }
-            return c;
-          }));
-        }
-      } else if (paymentMethod === 'credit_card' && paidFromAccountId) {
-        setCreditCards(prev => prev.map(c => {
-          if (c.id === paidFromAccountId) {
-            const newDebt = c.currentDebt + amt;
-            supabase.from('credit_cards').update({ current_debt: newDebt }).eq('id', c.id).then();
-            return { ...c, currentDebt: newDebt };
+          } else if (paymentMethod === 'credit_card' && paidFromAccountId) {
+            setCreditCards(prev => prev.map(c => {
+              if (c.id === paidFromAccountId) {
+                const newDebt = c.currentDebt + amt;
+                supabase.from('credit_cards').update({ current_debt: newDebt }).eq('id', c.id).then();
+                return { ...c, currentDebt: newDebt };
+              }
+              return c;
+            }));
           }
-          return c;
-        }));
+        }
+        toast.success("Ödeme yapıldı ve hesap bakiyeleri güncellendi");
       }
-      toast.success("Ödeme yapıldı ve hesap bakiyeleri güncellendi");
-    }
+    });
   }, []);
 
   const deleteUpcomingPayable = useCallback((id: string) => {
-    setUpcomingPayables(prev => prev.filter(x => x.id !== id));
-
     supabase.from('upcoming_payables').delete().eq('id', id).then(({ error }) => {
-      if (error) console.error("Ödeme DB silme hatası:", error);
+      if (error) {
+        console.error("Ödeme DB silme hatası:", error);
+        toast.error("Ödeme Silme Hatası: " + error.message);
+      } else {
+        setUpcomingPayables(prev => prev.filter(x => x.id !== id));
+        toast.success("Ödeme kaydı silindi");
+      }
     });
-
-    toast.success("Ödeme kaydı silindi");
   }, []);
 
   // --- HELPERS ---
@@ -1149,4 +1235,3 @@ export function AppProvider({ children }: { children: ReactNode }) {
     </AppContext.Provider>
   );
 }
-

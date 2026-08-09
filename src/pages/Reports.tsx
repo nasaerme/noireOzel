@@ -479,14 +479,18 @@ export default function Reports() {
 
     let codOrdersCount = 0;
     let codTotalRevenue = 0;
+    let codPaidCount = 0;
     let codPaidRevenue = 0;
+    let codPendingCount = 0;
     let codPendingRevenue = 0;
     let codCancelledCount = 0;
     let codCancellationPenaltyTotal = 0;
 
     let transferOrdersCount = 0;
     let transferTotalRevenue = 0;
+    let transferPaidCount = 0;
     let transferPaidRevenue = 0;
+    let transferPendingCount = 0;
     let transferPendingRevenue = 0;
 
     filteredOrders.forEach(o => {
@@ -502,8 +506,10 @@ export default function Reports() {
         } else {
           codTotalRevenue += calc.taxableAmount;
           if (isPaid) {
+            codPaidCount++;
             codPaidRevenue += calc.taxableAmount;
           } else {
+            codPendingCount++;
             codPendingRevenue += calc.taxableAmount;
           }
         }
@@ -511,8 +517,13 @@ export default function Reports() {
         transferOrdersCount++;
         if (!isCancelled) {
           transferTotalRevenue += calc.taxableAmount;
-          if (isPaid) transferPaidRevenue += calc.taxableAmount;
-          else transferPendingRevenue += calc.taxableAmount;
+          if (isPaid) {
+            transferPaidCount++;
+            transferPaidRevenue += calc.taxableAmount;
+          } else {
+            transferPendingCount++;
+            transferPendingRevenue += calc.taxableAmount;
+          }
         }
       } else { // kredi_karti
         creditCardOrdersCount++;
@@ -526,6 +537,7 @@ export default function Reports() {
     const totalPendingRevenue = codPendingRevenue + transferPendingRevenue;
     const totalGrossRevenue = totalCollectedRevenue + totalPendingRevenue;
     const codCancelRate = codOrdersCount > 0 ? (codCancelledCount / codOrdersCount) * 100 : 0;
+    const totalPendingOrdersCount = codPendingCount + transferPendingCount;
 
     const paymentMethodPieData = [
       { name: 'Kredi Kartı', value: creditCardOrdersCount, revenue: creditCardTotalRevenue, color: '#3b82f6' },
@@ -543,9 +555,9 @@ export default function Reports() {
       // Payment & COD metrics
       periodAllOrdersCount: filteredOrders.length,
       creditCardOrdersCount, creditCardTotalRevenue,
-      codOrdersCount, codTotalRevenue, codPaidRevenue, codPendingRevenue, codCancelledCount, codCancellationPenaltyTotal, codCancelRate,
-      transferOrdersCount, transferTotalRevenue, transferPaidRevenue, transferPendingRevenue,
-      totalCollectedRevenue, totalPendingRevenue, totalGrossRevenue, paymentMethodPieData,
+      codOrdersCount, codTotalRevenue, codPaidCount, codPaidRevenue, codPendingCount, codPendingRevenue, codCancelledCount, codCancellationPenaltyTotal, codCancelRate,
+      transferOrdersCount, transferTotalRevenue, transferPaidCount, transferPaidRevenue, transferPendingCount, transferPendingRevenue,
+      totalCollectedRevenue, totalPendingRevenue, totalGrossRevenue, totalPendingOrdersCount, paymentMethodPieData,
       // Return & Cancellation metrics
       returnedOrdersCount,
       cancelledOrdersCount,
@@ -692,11 +704,21 @@ export default function Reports() {
 
               <Card className="bg-card border-warning/30 bg-warning/5">
                 <CardHeader className="py-3">
-                  <CardTitle className="text-xs font-medium text-warning">Bekleyen Ciro (Kapıda Ödeme & Havale)</CardTitle>
+                  <CardTitle className="text-xs font-medium text-warning flex justify-between items-center">
+                    <span>Bekleyen Ciro (Kapıda Ödeme & Havale)</span>
+                    <Badge variant="outline" className="text-[10px] text-warning border-warning/40">
+                      {metrics.totalPendingOrdersCount} Sipariş Bekliyor
+                    </Badge>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="py-2">
                   <div className="text-2xl font-bold text-warning">{formatCurrency(metrics.totalPendingRevenue, sym)}</div>
-                  <p className="text-[11px] text-muted-foreground mt-1">Siparişte Ödeme Durumu "Ödendi" yapıldığında Tahsil Edilen Ciro'ya aktarılır</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {metrics.codPendingCount > 0 ? `${metrics.codPendingCount} Kapıda Ödeme` : ''}
+                    {metrics.codPendingCount > 0 && metrics.transferPendingCount > 0 ? ' + ' : ''}
+                    {metrics.transferPendingCount > 0 ? `${metrics.transferPendingCount} Havale` : ''}
+                    {metrics.totalPendingOrdersCount === 0 ? 'Tahsilat bekleyen sipariş yok' : ' siparişi tahsilat bekliyor'}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -1365,32 +1387,46 @@ export default function Reports() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-secondary/30 rounded-lg border border-border/50">
-                    <span className="text-xs text-muted-foreground block">Toplam Kapıda Ödeme</span>
-                    <span className="text-xl font-bold">{metrics.codOrdersCount} Sipariş</span>
-                    <span className="text-xs text-muted-foreground block mt-0.5">Top. Tutar: {formatCurrency(metrics.codTotalRevenue, sym)}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                    <span className="text-xs text-emerald-500 font-medium block">Tahsil Edilen (Ödendi)</span>
+                    <span className="text-xl font-bold text-emerald-500">{metrics.codPaidCount} Sipariş</span>
+                    <span className="text-xs text-muted-foreground block mt-0.5">{formatCurrency(metrics.codPaidRevenue, sym)}</span>
+                  </div>
+
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <span className="text-xs text-amber-500 font-medium block">Bekleyen (Beklemede)</span>
+                    <span className="text-xl font-bold text-amber-500">{metrics.codPendingCount} Sipariş</span>
+                    <span className="text-xs text-muted-foreground block mt-0.5">{formatCurrency(metrics.codPendingRevenue, sym)}</span>
                   </div>
 
                   <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
                     <span className="text-xs text-destructive font-medium block">İptal / İade Edilen</span>
                     <span className="text-xl font-bold text-destructive">{metrics.codCancelledCount} Sipariş</span>
-                    <span className="text-xs text-destructive/80 block mt-0.5">Maliyet Kaybı: {formatCurrency(metrics.codCancellationPenaltyTotal, sym)}</span>
+                    <span className="text-xs text-destructive/80 block mt-0.5">Kargo Kaybı: {formatCurrency(metrics.codCancellationPenaltyTotal, sym)}</span>
                   </div>
                 </div>
 
                 <div className="p-3 bg-secondary/20 rounded-lg border border-border/40 space-y-2 text-xs">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Toplam Kapıda Ödeme Siparişi:</span>
+                    <span className="font-semibold">{metrics.codOrdersCount} Sipariş ({formatCurrency(metrics.codTotalRevenue, sym)})</span>
+                  </div>
+                  <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Tahsil Edilen Kapıda Ödeme (Ödendi):</span>
-                    <span className="font-semibold text-success">{formatCurrency(metrics.codPaidRevenue, sym)}</span>
+                    <span className="font-semibold text-emerald-500">{metrics.codPaidCount} Sipariş ({formatCurrency(metrics.codPaidRevenue, sym)})</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Bekleyen Kapıda Ödeme (Beklemede):</span>
-                    <span className="font-semibold text-warning">{formatCurrency(metrics.codPendingRevenue, sym)}</span>
+                    <span className="font-semibold text-amber-500">{metrics.codPendingCount} Sipariş ({formatCurrency(metrics.codPendingRevenue, sym)})</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">İptal Oranı:</span>
-                    <span className="font-semibold text-destructive">%{metrics.codCancelRate.toFixed(1)} ({metrics.codCancelledCount} / {metrics.codOrdersCount || 0})</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">İptal / İade Edilen Sipariş:</span>
+                    <span className="font-semibold text-destructive">{metrics.codCancelledCount} Sipariş ({formatCurrency(metrics.codCancellationPenaltyTotal, sym)} Kargo Kaybı)</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-border/40">
+                    <span className="text-muted-foreground">İptal / İade Oranı:</span>
+                    <span className="font-semibold text-destructive">%{metrics.codCancelRate.toFixed(1)} ({metrics.codCancelledCount} / {metrics.codOrdersCount || 0} Sipariş)</span>
                   </div>
                 </div>
 
