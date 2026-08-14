@@ -15,13 +15,15 @@ import {
   Plus, Search, Edit2, Trash2, Wallet, ArrowUpRight, ArrowDownLeft, 
   Calendar, FileText, X, Building2, CreditCard as CreditCardIcon, 
   Clock, CheckCircle2, AlertCircle, Upload, Eye, Download, ShieldAlert,
-  ArrowRightLeft, FileCheck, Layers, Check, ShoppingBag, ListPlus, Tag
+  ArrowRightLeft, FileCheck, Layers, Check, ShoppingBag, ListPlus, Tag,
+  TrendingUp, TrendingDown, Receipt
 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CashLedger() {
   const { 
     bankAccounts, creditCards, supplierInvoices, expectedPayouts, upcomingPayables,
+    orders, expenses,
     settings,
     addBankAccount, updateBankAccount, deleteBankAccount,
     addCreditCard, updateCreditCard, deleteCreditCard,
@@ -32,6 +34,128 @@ export default function CashLedger() {
 
   const sym = settings.currencySymbol;
   const [activeTab, setActiveTab] = useState("overview");
+
+  // --- DATE FILTER STATES ---
+  type Period = 'all_time' | 'today' | 'yesterday' | 'week' | 'month' | 'last_month' | 'specific_month' | 'custom';
+  const [period, setPeriod] = useState<Period>('all_time');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    let start: Date, end: Date;
+    switch (period) {
+      case 'today':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        break;
+      case 'yesterday':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+        break;
+      case 'week':
+        start = new Date(now.getTime() - 7 * 86400000);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        break;
+      case 'month':
+        start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        break;
+      case 'last_month':
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        break;
+      case 'specific_month':
+        start = new Date(selectedYear, selectedMonth, 1, 0, 0, 0);
+        end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+        break;
+      case 'custom':
+        start = startDate ? new Date(startDate + 'T00:00:00') : new Date(2000, 0, 1);
+        end = endDate ? new Date(endDate + 'T23:59:59') : new Date(2099, 11, 31);
+        break;
+      case 'all_time':
+      default:
+        start = new Date(2000, 0, 1);
+        end = new Date(2099, 11, 31);
+    }
+    return { start, end };
+  }, [period, startDate, endDate, selectedYear, selectedMonth]);
+
+  // --- VALOR FILTER & SORT STATES ---
+  const [valorSourceFilter, setValorSourceFilter] = useState<string>('all');
+  const [valorSortOrder, setValorSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // --- SUPPLIER INVOICE FILTER STATE ---
+  const [supplierTypeFilter, setSupplierTypeFilter] = useState<string>('all');
+
+  // --- FILTERED DATA LISTS ---
+  const filteredExpectedPayouts = useMemo(() => {
+    let list = expectedPayouts;
+    if (period !== 'all_time') {
+      list = list.filter(p => {
+        const targetDateStr = p.expectedPayoutDate || p.orderDate;
+        if (!targetDateStr) return true;
+        const d = new Date(targetDateStr);
+        return d >= dateRange.start && d <= dateRange.end;
+      });
+    }
+    if (valorSourceFilter !== 'all') {
+      list = list.filter(p => p.source === valorSourceFilter);
+    }
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.expectedPayoutDate || a.orderDate || 0).getTime();
+      const timeB = new Date(b.expectedPayoutDate || b.orderDate || 0).getTime();
+      return valorSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+    });
+  }, [expectedPayouts, period, dateRange, valorSourceFilter, valorSortOrder]);
+
+  const filteredOrders = useMemo(() => {
+    if (period === 'all_time') return orders;
+    return orders.filter(o => {
+      if (!o.orderDate) return true;
+      const d = new Date(o.orderDate);
+      return d >= dateRange.start && d <= dateRange.end;
+    });
+  }, [orders, period, dateRange]);
+
+  const filteredExpenses = useMemo(() => {
+    if (period === 'all_time') return expenses;
+    return expenses.filter(e => {
+      if (!e.date) return true;
+      const d = new Date(e.date);
+      return d >= dateRange.start && d <= dateRange.end;
+    });
+  }, [expenses, period, dateRange]);
+
+  const filteredSupplierInvoices = useMemo(() => {
+    let list = supplierInvoices;
+    if (period !== 'all_time') {
+      list = list.filter(inv => {
+        if (!inv.date) return true;
+        const d = new Date(inv.date);
+        return d >= dateRange.start && d <= dateRange.end;
+      });
+    }
+    if (supplierTypeFilter !== 'all') {
+      list = list.filter(inv => {
+        const isProduct = inv.invoiceType === 'product' || (!inv.invoiceType && inv.items && inv.items.length > 0);
+        return supplierTypeFilter === 'product' ? isProduct : !isProduct;
+      });
+    }
+    return list;
+  }, [supplierInvoices, period, dateRange, supplierTypeFilter]);
+
+  const filteredUpcomingPayables = useMemo(() => {
+    if (period === 'all_time') return upcomingPayables;
+    return upcomingPayables.filter(u => {
+      if (!u.dueDate) return true;
+      const d = new Date(u.dueDate);
+      return d >= dateRange.start && d <= dateRange.end;
+    });
+  }, [upcomingPayables, period, dateRange]);
 
   // --- DIALOG STATES ---
   const [bankDialogOpen, setBankDialogOpen] = useState(false);
@@ -104,29 +228,75 @@ export default function CashLedger() {
     const totalCreditDebt = creditCards.reduce((s, c) => s + c.currentDebt, 0);
     const availableCreditLimit = totalCreditLimit - totalCreditDebt;
 
-    const pendingPayouts = expectedPayouts.filter(p => p.status === 'pending');
+    // Valörs (Receivables)
+    const pendingPayouts = filteredExpectedPayouts.filter(p => p.status === 'pending');
+    const completedPayouts = filteredExpectedPayouts.filter(p => p.status === 'completed');
     const pendingValorsTotal = pendingPayouts.reduce((s, p) => s + p.amount, 0);
+    const completedValorsTotal = completedPayouts.reduce((s, p) => s + p.amount, 0);
     const paytrTotal = pendingPayouts.filter(p => p.source === 'paytr').reduce((s, p) => s + p.amount, 0);
     const codTotal = pendingPayouts.filter(p => p.source === 'kapida_odeme').reduce((s, p) => s + p.amount, 0);
+    const totalValorsAmount = filteredExpectedPayouts.reduce((s, p) => s + p.amount, 0);
 
-    const pendingPayables = upcomingPayables.filter(u => u.status === 'pending');
+    // Period Cash Inflow / Girdi (Hesaba Yatan Valörlü Alacakların Toplamı)
+    const totalRevenue = completedValorsTotal;
+
+    // Period Product Stock Purchases (Çoklu Ürün Alımı / Stok Tedariği)
+    const productInvoices = filteredSupplierInvoices.filter(inv => {
+      return inv.invoiceType === 'product' || (!inv.invoiceType && inv.items && inv.items.length > 0);
+    });
+    const supplierInvoicesTotal = productInvoices.reduce((s, inv) => s + inv.amount, 0);
+
+    // Period General Operational Expenses (Diğer / Genel Gider Faturaları)
+    const otherInvoices = filteredSupplierInvoices.filter(inv => {
+      return inv.invoiceType === 'other' || (!inv.invoiceType && (!inv.items || inv.items.length === 0));
+    });
+    const operationalExpensesTotal = otherInvoices.reduce((s, inv) => s + inv.amount, 0);
+
+    // Total Period Expenses (Stock Purchases + General Invoices)
+    const totalExpensesSum = supplierInvoicesTotal + operationalExpensesTotal;
+
+    // Net Period Cash Profit / Flow
+    const netPeriodProfit = totalRevenue - totalExpensesSum;
+
+    // Payables (Upcoming Debts)
+    const pendingPayables = filteredUpcomingPayables.filter(u => u.status === 'pending');
     const pendingPayablesTotal = pendingPayables.reduce((s, u) => s + u.amount, 0);
+    const totalPayablesAmount = filteredUpcomingPayables.reduce((s, u) => s + u.amount, 0);
 
+    // Liquidity Position
     const netLiquidity = (totalBankBalance + pendingValorsTotal) - pendingPayablesTotal;
+
+    // Missing Invoices Count (Supplier Invoices without file attached)
+    const missingInvoiceCount = filteredSupplierInvoices.filter(i => i.invoiceStatus !== 'received' && !i.invoiceFile).length;
+    const missingInvoicesList = filteredSupplierInvoices.filter(i => i.invoiceStatus !== 'received' && !i.invoiceFile);
 
     return {
       totalBankBalance,
       totalCreditLimit,
       totalCreditDebt,
       availableCreditLimit,
+      totalRevenue,
+      productInvoicesCount: productInvoices.length,
+      otherInvoicesCount: otherInvoices.length,
+      supplierInvoicesTotal,
+      operationalExpensesTotal,
+      totalExpensesSum,
+      netPeriodProfit,
       pendingValorsTotal,
       pendingPayouts,
+      completedValorsTotal,
+      completedPayouts,
       paytrTotal,
       codTotal,
+      totalValorsAmount,
       pendingPayablesTotal,
-      netLiquidity
+      pendingPayables,
+      totalPayablesAmount,
+      netLiquidity,
+      missingInvoiceCount,
+      missingInvoicesList
     };
-  }, [bankAccounts, creditCards, expectedPayouts, upcomingPayables]);
+  }, [bankAccounts, creditCards, filteredOrders, filteredSupplierInvoices, filteredExpectedPayouts, filteredUpcomingPayables]);
 
   // --- BANK HANDLERS ---
   const openAddBank = () => {
@@ -436,6 +606,67 @@ export default function CashLedger() {
         </div>
       </div>
 
+      {/* Global Date Filter Bar */}
+      <div className="bg-card border border-border p-3.5 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <Calendar className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">Tarih Seçimi:</span>
+          <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
+            <SelectTrigger className="w-[190px] h-9 text-xs">
+              <SelectValue placeholder="Tarih Seçin" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all_time">📆 Tüm Zamanlar</SelectItem>
+              <SelectItem value="today">📅 Bugün (Günlük)</SelectItem>
+              <SelectItem value="yesterday">📅 Dün</SelectItem>
+              <SelectItem value="week">🗓️ Bu Hafta (Son 7 Gün)</SelectItem>
+              <SelectItem value="month">📅 Bu Ay (Aylık)</SelectItem>
+              <SelectItem value="last_month">🗓️ Geçen Ay</SelectItem>
+              <SelectItem value="specific_month">📅 Belirli Ay Seç</SelectItem>
+              <SelectItem value="custom">⚙️ Özel Tarih Aralığı</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {period === 'specific_month' && (
+            <div className="flex items-center gap-2">
+              <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(Number(v))}>
+                <SelectTrigger className="w-[100px] h-9 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[2024, 2025, 2026, 2027].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={String(selectedMonth)} onValueChange={v => setSelectedMonth(Number(v))}>
+                <SelectTrigger className="w-[120px] h-9 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'].map((m, idx) => (
+                    <SelectItem key={idx} value={String(idx)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {period === 'custom' && (
+            <div className="flex items-center gap-2">
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 text-xs w-[140px]" />
+              <span className="text-xs text-muted-foreground">-</span>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9 text-xs w-[140px]" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-muted-foreground ml-auto">
+          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 py-1">
+            {period === 'all_time' ? 'Tüm Zamanlar Gösteriliyor' : `${formatDate(dateRange.start.toISOString())} - ${formatDate(dateRange.end.toISOString())}`}
+          </Badge>
+          {period !== 'all_time' && (
+            <Button variant="ghost" size="sm" onClick={() => setPeriod('all_time')} className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5 mr-1" /> Temizle
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-2 sm:grid-cols-5 w-full h-auto p-1 bg-muted/60">
@@ -443,202 +674,285 @@ export default function CashLedger() {
             <Layers className="h-3.5 w-3.5" /> Genel Bakış
           </TabsTrigger>
           <TabsTrigger value="valors" className="text-xs py-2.5 gap-1.5">
-            <Clock className="h-3.5 w-3.5" /> Valörlü Alacaklar
+            <Clock className="h-3.5 w-3.5" /> Valörlü Alacaklar ({filteredExpectedPayouts.length})
           </TabsTrigger>
           <TabsTrigger value="suppliers" className="text-xs py-2.5 gap-1.5">
-            <FileText className="h-3.5 w-3.5" /> Tedarik & Faturalar
+            <FileText className="h-3.5 w-3.5" /> Tedarik & Faturalar ({filteredSupplierInvoices.length})
           </TabsTrigger>
           <TabsTrigger value="payables" className="text-xs py-2.5 gap-1.5">
-            <ShieldAlert className="h-3.5 w-3.5" /> Gelecek Borçlar
+            <ShieldAlert className="h-3.5 w-3.5" /> Gelecek Borçlar ({filteredUpcomingPayables.length})
           </TabsTrigger>
           <TabsTrigger value="accounts" className="text-xs py-2.5 gap-1.5">
             <Building2 className="h-3.5 w-3.5" /> Banka & Kartlar
           </TabsTrigger>
         </TabsList>
 
-        {/* ==================== TAB 1: GENEL BAKIŞ (OVERVIEW) ==================== */}
+        {/* ==================== TAB 1: GENEL BAKIŞ & ÖN MUHASEBE ==================== */}
         <TabsContent value="overview" className="space-y-6 mt-4">
-          {/* Executive Metrics Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="border-l-4 border-l-emerald-500">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
-                  <span>TOPLAM BANKA BAKİYESİ</span>
-                  <Building2 className="h-4 w-4 text-emerald-500" />
+          
+          {/* KATMAN 1: DÖNEMSEL PERFORMANS (NE ALDIK - NE VERDİK - NE KALDI?) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-primary" /> Dönemsel Ön Muhasebe & Kasa Özeti
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                Seçili Filtre: <strong>{period === 'all_time' ? 'Tüm Zamanlar' : `${formatDate(dateRange.start.toISOString())} - ${formatDate(dateRange.end.toISOString())}`}</strong>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Cirolar & Girdiler */}
+              <Card className="border-l-4 border-l-emerald-500 bg-emerald-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
+                    <span>GİRDİ / TOPLAM CİRO</span>
+                    <TrendingUp className="h-4 w-4 text-emerald-500" />
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(totals.totalRevenue, sym)}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    {totals.completedPayouts.length} Adet Hesaba Yatan Alacak
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 2. Tedarik & Stok Alımı */}
+              <Card className="border-l-4 border-l-amber-500 bg-amber-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
+                    <span>STOK & MAL ALIM GİDERİ</span>
+                    <ShoppingBag className="h-4 w-4 text-amber-500" />
+                  </div>
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                    {formatCurrency(totals.supplierInvoicesTotal, sym)}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    {totals.productInvoicesCount} Adet Ürün Alım Faturası
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 3. Operasyonel Giderler */}
+              <Card className="border-l-4 border-l-rose-500 bg-rose-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
+                    <span>OPERASYONEL GİDERLER</span>
+                    <TrendingDown className="h-4 w-4 text-rose-500" />
+                  </div>
+                  <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                    {formatCurrency(totals.operationalExpensesTotal, sym)}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    {totals.otherInvoicesCount} Adet Genel Gider Faturası
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 4. Dönemsel Net Kasa Karı */}
+              <Card className={`border-l-4 ${totals.netPeriodProfit >= 0 ? 'border-l-purple-500 bg-purple-500/5' : 'border-l-destructive bg-destructive/5'}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
+                    <span>DÖNEM NET KASA KÂRI / FARKI</span>
+                    <Wallet className={`h-4 w-4 ${totals.netPeriodProfit >= 0 ? 'text-purple-500' : 'text-destructive'}`} />
+                  </div>
+                  <div className={`text-2xl font-bold ${totals.netPeriodProfit >= 0 ? 'text-purple-600 dark:text-purple-400' : 'text-destructive'}`}>
+                    {formatCurrency(totals.netPeriodProfit, sym)}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    (Ciro) - (Mal Alımı + Operasyonel)
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* KATMAN 2: LİKİDİTE & GELECEK NAKİT POZİSYONU (2 BÜYÜK KART) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Sol Kart: Kasadaki Nakit + Bekleyen Alacaklar */}
+            <Card className="border border-emerald-500/30">
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-base font-bold text-emerald-700 dark:text-emerald-400 flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" /> Anlık Nakit Varlıkları & Bekleyen Valörler
+                  </span>
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                    Kasa Gücü
+                  </Badge>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Banka hesap bakiyeleri ve hesaba geçmeyi bekleyen PayTR/Kapıda ödeme alacakları
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Building2 className="h-4 w-4 text-emerald-600" />
+                    <span>Toplam Banka Bakiyesi ({bankAccounts.length} Hesap)</span>
+                  </div>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                    {formatCurrency(totals.totalBankBalance, sym)}
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {formatCurrency(totals.totalBankBalance, sym)}
+
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="h-4 w-4 text-amber-500" />
+                    <span>Bekleyen Valörlü Alacaklar ({totals.pendingPayouts.length} Adet)</span>
+                  </div>
+                  <span className="font-bold text-amber-600 dark:text-amber-400 text-sm">
+                    {formatCurrency(totals.pendingValorsTotal, sym)}
+                  </span>
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-1">
-                  {bankAccounts.length} Adet Aktif Banka Hesabı
+
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                  <div className="flex items-center gap-2 text-sm">
+                    <CreditCardIcon className="h-4 w-4 text-blue-500" />
+                    <span>Kredi Kartı Harcanabilir Limit</span>
+                  </div>
+                  <span className="font-bold text-blue-600 dark:text-blue-400 text-sm">
+                    {formatCurrency(totals.availableCreditLimit, sym)}
+                  </span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-l-4 border-l-blue-500">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
-                  <span>KREDİ KARTI HARCANABİLİR</span>
-                  <CreditCardIcon className="h-4 w-4 text-blue-500" />
+            {/* Sağ Kart: Gelecek Borçlar & Net Likidite Dengesi */}
+            <Card className="border border-purple-500/30">
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-base font-bold text-purple-700 dark:text-purple-400 flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4" /> Gelecek Borçlar & Net Pozisyon Dengesi
+                  </span>
+                  <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/30">
+                    Gelecek Dengesi
+                  </Badge>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Vadeli borçların düşülmesiyle önümüzdeki dönemin net nakit projeksiyonu
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                  <div className="flex items-center gap-2 text-sm">
+                    <ShieldAlert className="h-4 w-4 text-destructive" />
+                    <span>Bekleyen Gelecek Borçlar ({totals.pendingPayables.length} Kayıt)</span>
+                  </div>
+                  <span className="font-bold text-destructive text-sm">
+                    {formatCurrency(totals.pendingPayablesTotal, sym)}
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {formatCurrency(totals.availableCreditLimit, sym)}
-                </div>
-                <div className="text-[11px] text-muted-foreground mt-1">
-                  Mevcut Borç: <span className="font-semibold text-destructive">{formatCurrency(totals.totalCreditDebt, sym)}</span>
-                </div>
-              </CardContent>
-            </Card>
 
-            <Card className="border-l-4 border-l-amber-500">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
-                  <span>BEKLEYEN VALÖRLÜ ALACAKLAR</span>
-                  <Clock className="h-4 w-4 text-amber-500" />
+                <div className="p-3 rounded-lg border bg-purple-500/10 border-purple-500/20 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-purple-700 dark:text-purple-300">NET GELECEK NAKİT POZİSYONU</div>
+                    <div className="text-[11px] text-muted-foreground">(Banka Nakit + Valörler) - Vadeli Borçlar</div>
+                  </div>
+                  <span className={`text-xl font-extrabold ${totals.netLiquidity < 0 ? 'text-destructive' : 'text-purple-600 dark:text-purple-400'}`}>
+                    {formatCurrency(totals.netLiquidity, sym)}
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  {formatCurrency(totals.pendingValorsTotal, sym)}
-                </div>
-                <div className="text-[11px] text-muted-foreground mt-1 flex justify-between">
-                  <span>PayTR (7g): {formatCurrency(totals.paytrTotal, sym)}</span>
-                  <span>Kapıda (8g): {formatCurrency(totals.codTotal, sym)}</span>
-                </div>
-              </CardContent>
-            </Card>
 
-            <Card className="border-l-4 border-l-purple-500">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
-                  <span>NET GELECEK NAKİT POZİSYONU</span>
-                  <Wallet className="h-4 w-4 text-purple-500" />
-                </div>
-                <div className={`text-2xl font-bold ${totals.netLiquidity < 0 ? 'text-destructive' : 'text-purple-600 dark:text-purple-400'}`}>
-                  {formatCurrency(totals.netLiquidity, sym)}
-                </div>
-                <div className="text-[11px] text-muted-foreground mt-1">
-                  (Nakit + Valörler) - Gelecek Borçlar ({formatCurrency(totals.pendingPayablesTotal, sym)})
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-1">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>Nakit akışınız pozitif seviyede olduğu sürece operasyonel risk taşımazsınız.</span>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Bekleyen Valörlü Alacaklar Tahsilat Modülü */}
-          <Card className="border border-emerald-500/30 bg-emerald-500/5">
-            <CardHeader className="p-4 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                  <Clock className="h-4 w-4" /> Bekleyen Valörlü Alacaklar & Bankaya Aktarma Onayı
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Hesabınıza geçen alacağı buradan onaylayarak seçtiğiniz banka bakiyesine anında ekleyebilirsiniz.
-                </CardDescription>
-              </div>
-              <Button size="sm" variant="outline" onClick={openAddPayout} className="h-8 text-xs gap-1 border-emerald-500/30 text-emerald-700">
-                <Plus className="h-3.5 w-3.5" /> Alacak Ekle
-              </Button>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              {totals.pendingPayouts.length === 0 ? (
-                <div className="p-4 text-center text-xs text-muted-foreground bg-card rounded-lg border">
-                  Bekleyen valörlü alacak bulunmuyor.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {totals.pendingPayouts.map(p => (
-                    <div key={p.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-border bg-card gap-2">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="secondary" className={p.source === 'paytr' ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20 text-[11px]' : 'bg-purple-500/10 text-purple-600 border border-purple-500/20 text-[11px]'}>
-                          {p.source === 'paytr' ? 'PayTR (7 Gün)' : p.source === 'kapida_odeme' ? 'Kapıda Ödeme (8 Gün)' : 'Diğer Alacak'}
-                        </Badge>
-                        <div>
-                          <span className="font-bold text-sm">{p.orderNumber || 'Sipariş'}</span>
-                          <span className="text-xs text-muted-foreground ml-2">Valör Tarihi: <strong>{formatDate(p.expectedPayoutDate)}</strong></span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between sm:justify-end gap-3">
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{formatCurrency(p.amount, sym)}</span>
-                        <Button 
-                          size="sm" 
-                          onClick={() => openCompletePayout(p)} 
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs gap-1 shadow-sm"
-                        >
-                          <Check className="h-3.5 w-3.5" /> Hesaba Yattı (Onayla)
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Accounts Overview Grid */}
+          {/* KATMAN 3: KRİTİK ÖN MUHASEBE AKSİYON KUTULARI (EKSİK FATURA & YAKLAŞAN BORÇLAR) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Bank Accounts Summary */}
-            <Card>
+            {/* Eksik Faturası Olan Tedarikler */}
+            <Card className="border border-amber-500/30">
               <CardHeader className="p-4 flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-base font-bold">Banka Hesap Bakiyeleri</CardTitle>
-                  <CardDescription className="text-xs">Mevcut tanımlı banka ve kasa hesapları</CardDescription>
+                  <CardTitle className="text-base font-bold flex items-center gap-2 text-amber-600">
+                    <FileText className="h-4 w-4" /> Faturası Beklenen Tedarik Kayıtları ({totals.missingInvoiceCount})
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Tedarikçiye ödemesi yapılan veya girilen ancak henüz PDF/Görsel faturası yüklenmemiş alımlar
+                  </CardDescription>
                 </div>
-                <Button size="sm" variant="outline" onClick={openAddBank} className="h-8 text-xs gap-1">
-                  <Plus className="h-3.5 w-3.5" /> Hesap Ekle
+                <Button size="sm" variant="outline" onClick={() => setActiveTab("suppliers")} className="h-7 text-xs gap-1">
+                  Tümünü Gör
                 </Button>
               </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-3">
-                {bankAccounts.map(b => (
-                  <div key={b.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: b.color || '#16a34a' }}>
-                        {b.bankName.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-sm">{b.name}</div>
-                        <div className="text-xs text-muted-foreground">{b.bankName} • {b.iban || 'IBAN yok'}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{formatCurrency(b.balance, sym)}</div>
-                      <Button variant="ghost" size="sm" onClick={() => openEditBank(b)} className="h-6 text-[11px] px-2">Düzenle</Button>
-                    </div>
+              <CardContent className="p-4 pt-0">
+                {totals.missingInvoiceCount === 0 ? (
+                  <div className="p-3 text-center text-xs text-emerald-600 bg-emerald-500/10 rounded-lg border border-emerald-500/20 font-medium">
+                    ✅ Harika! Tüm tedarik kayıtlarınızın fatura dosyaları eksiksiz yüklendi.
                   </div>
-                ))}
+                ) : (
+                  <div className="space-y-2">
+                    {totals.missingInvoicesList.slice(0, 3).map(inv => (
+                      <div key={inv.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-card text-xs">
+                        <div>
+                          <span className="font-bold">{inv.supplierName}</span>
+                          <span className="text-muted-foreground ml-2">({formatDate(inv.date)})</span>
+                          <div className="text-muted-foreground text-[11px] truncate max-w-[200px]">{inv.itemsSummary}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-destructive">{formatCurrency(inv.amount, sym)}</span>
+                          <Button 
+                            size="sm" 
+                            variant="secondary" 
+                            onClick={() => {
+                              setSelectedInvoiceForUpload(inv);
+                              setTempFile(null);
+                              setUploadInvoiceDialogOpen(true);
+                            }}
+                            className="h-7 text-xs gap-1"
+                          >
+                            <Upload className="h-3 w-3" /> Yükle
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Credit Cards Summary */}
-            <Card>
+            {/* Vadeli Borçlar & Ödeme Listesi */}
+            <Card className="border border-rose-500/30">
               <CardHeader className="p-4 flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-base font-bold">Kredi Kartı Limit Durumu</CardTitle>
-                  <CardDescription className="text-xs">Ticari kredi kartı limit ve ekstre takibi</CardDescription>
+                  <CardTitle className="text-base font-bold flex items-center gap-2 text-rose-600">
+                    <ShieldAlert className="h-4 w-4" /> Ödenmesi Gereken Borçlar ({totals.pendingPayables.length})
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Son ödeme tarihi yaklaşan veya gecikmiş vadeli giderler
+                  </CardDescription>
                 </div>
-                <Button size="sm" variant="outline" onClick={openAddCard} className="h-8 text-xs gap-1">
-                  <Plus className="h-3.5 w-3.5" /> Kart Ekle
+                <Button size="sm" variant="outline" onClick={() => setActiveTab("payables")} className="h-7 text-xs gap-1">
+                  Tümünü Gör
                 </Button>
               </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-3">
-                {creditCards.map(c => {
-                  const avail = c.totalLimit - c.currentDebt;
-                  const usagePct = Math.min(100, Math.round((c.currentDebt / c.totalLimit) * 100));
-                  return (
-                    <div key={c.id} className="p-3 rounded-lg border border-border bg-card space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <CreditCardIcon className="h-4 w-4 text-destructive" />
-                          <span className="font-semibold text-sm">{c.name}</span>
-                          <span className="text-xs text-muted-foreground">(**** {c.cardNumberLast4 || '0000'})</span>
+              <CardContent className="p-4 pt-0">
+                {totals.pendingPayables.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-emerald-600 bg-emerald-500/10 rounded-lg border border-emerald-500/20 font-medium">
+                    ✅ Harika! Ödenmesi gereken bekleyen borç bulunmuyor.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {totals.pendingPayables.slice(0, 3).map(u => (
+                      <div key={u.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-card text-xs">
+                        <div>
+                          <span className="font-bold">{u.title}</span>
+                          <span className="text-muted-foreground ml-2">Vade: {formatDate(u.dueDate)}</span>
                         </div>
-                        <span className="text-xs font-medium text-destructive">Borç: {formatCurrency(c.currentDebt, sym)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-destructive">{formatCurrency(u.amount, sym)}</span>
+                          <Button size="sm" onClick={() => openPayPayable(u)} className="h-7 text-xs bg-primary hover:bg-primary/90">
+                            Öde
+                          </Button>
+                        </div>
                       </div>
-                      <Progress value={usagePct} className="h-1.5" />
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Kullanılabilir: <strong className="text-foreground">{formatCurrency(avail, sym)}</strong></span>
-                        <span>Son Ödeme: <strong>Her ayın {c.dueDay}. günü</strong></span>
-                      </div>
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -646,16 +960,101 @@ export default function CashLedger() {
 
         {/* ==================== TAB 2: VALÖRLÜ ALACAKLAR (VALORS) ==================== */}
         <TabsContent value="valors" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-bold">PayTR & Kapıda Ödeme Valör Takvimi</h2>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 PayTR siparişleri +7 gün, Kapıda ödeme siparişleri teslimattan sonra +8 gün valörle hesaba geçer.
               </p>
             </div>
             <Button onClick={openAddPayout} size="sm" className="gap-1">
               <Plus className="h-4 w-4" /> Manuel Alacak Ekle
             </Button>
+          </div>
+
+          {/* Valör Alacak Özet Kartları */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="border-l-4 border-l-amber-500 bg-amber-500/5">
+              <CardContent className="p-3.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
+                  <span>⏳ BEKLEYEN VALÖRLÜ BAKİYE</span>
+                  <Clock className="h-4 w-4 text-amber-500" />
+                </div>
+                <div className="text-xl font-bold text-amber-600 dark:text-amber-400">
+                  {formatCurrency(totals.pendingValorsTotal, sym)}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  {totals.pendingPayouts.length} Adet Hesaba Yatacak Alacak
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-emerald-500 bg-emerald-500/5">
+              <CardContent className="p-3.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
+                  <span>✅ HESABA YATAN BAKİYE</span>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                </div>
+                <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(totals.completedValorsTotal, sym)}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  {totals.completedPayouts.length} Adet Tahsil Edilmiş Alacak
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-blue-500 bg-blue-500/5">
+              <CardContent className="p-3.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1">
+                  <span>💰 TOPLAM ALACAK (FİLTRELENEN)</span>
+                  <Wallet className="h-4 w-4 text-blue-500" />
+                </div>
+                <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                  {formatCurrency(totals.totalValorsAmount, sym)}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  {filteredExpectedPayouts.length} Adet Toplam Kayıt
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Ödeme Kanalı ve Sıralama Filtre Barı */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 p-3 rounded-lg border border-border">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-muted-foreground">Ödeme Kanalı:</span>
+                <Select value={valorSourceFilter} onValueChange={setValorSourceFilter}>
+                  <SelectTrigger className="w-[170px] h-8 text-xs bg-card">
+                    <SelectValue placeholder="Tüm Kanallar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">🌐 Tüm Kanallar</SelectItem>
+                    <SelectItem value="paytr">💳 PayTR (7 Gün)</SelectItem>
+                    <SelectItem value="kapida_odeme">📦 Kapıda Ödeme (8 Gün)</SelectItem>
+                    <SelectItem value="diger">📝 Diğer Alacaklar</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-muted-foreground">Valör Tarihi Sıralaması:</span>
+                <Select value={valorSortOrder} onValueChange={(v: 'asc' | 'desc') => setValorSortOrder(v)}>
+                  <SelectTrigger className="w-[190px] h-8 text-xs bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="asc">⏳ Yakın Tarihten Uzağa (Artan)</SelectItem>
+                    <SelectItem value="desc">⌛ Uzak Tarihten Yakına (Azalan)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="text-xs font-semibold text-muted-foreground">
+              {filteredExpectedPayouts.length} Adet Alacak Kaydı
+            </div>
           </div>
 
           <div className="border border-border bg-card rounded-xl overflow-hidden">
@@ -665,14 +1064,25 @@ export default function CashLedger() {
                   <th className="p-3 font-semibold">Sipariş No</th>
                   <th className="p-3 font-semibold">Ödeme Kanalı / Türü</th>
                   <th className="p-3 font-semibold">Sipariş Tarihi</th>
-                  <th className="p-3 font-semibold">Valör (Hesaba Yatış) Tarihi</th>
+                  <th 
+                    className="p-3 font-semibold cursor-pointer hover:text-foreground transition-colors select-none"
+                    onClick={() => setValorSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    title="Valör tarihine göre sıralamak için tıklayın"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Valör (Hesaba Yatış) Tarihi</span>
+                      <span className="text-xs font-bold text-primary">
+                        {valorSortOrder === 'asc' ? '↑' : '↓'}
+                      </span>
+                    </div>
+                  </th>
                   <th className="p-3 font-semibold text-right">Tutar</th>
                   <th className="p-3 font-semibold text-center">Durum</th>
                   <th className="p-3 font-semibold text-right">İşlem</th>
                 </tr>
               </thead>
               <tbody>
-                {expectedPayouts.map(p => {
+                {filteredExpectedPayouts.map(p => {
                   const isPending = p.status === 'pending';
                   return (
                     <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
@@ -713,24 +1123,50 @@ export default function CashLedger() {
                 })}
               </tbody>
             </table>
-            {expectedPayouts.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground">Alacak kaydı bulunmuyor.</div>
+            {filteredExpectedPayouts.length === 0 && (
+              <div className="p-8 text-center text-muted-foreground">Seçilen tarih aralığında alacak kaydı bulunmuyor.</div>
             )}
           </div>
         </TabsContent>
 
         {/* ==================== TAB 3: TEDARİK & FATURALAR (SUPPLIERS) ==================== */}
         <TabsContent value="suppliers" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h2 className="text-lg font-bold">Stok Tedarik & Ürün Alım Faturaları</h2>
-              <p className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold">Stok Tedarik & Ürün Alım Faturaları</h2>
+                <Badge variant="secondary" className="bg-rose-500/10 text-rose-600 border border-rose-500/20 font-semibold text-xs">
+                  Filtrelenen Toplam: {formatCurrency(filteredSupplierInvoices.reduce((s, i) => s + i.amount, 0), sym)}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Tedarik türünü seçin: Ürün alımı için çoklu kalemli KDV'li form veya diğer genel giderler için sade form.
               </p>
             </div>
             <Button onClick={openAddSupplier} size="sm" className="gap-1.5 bg-primary hover:bg-primary/90">
               <Plus className="h-4 w-4" /> Yeni Tedarik / Fatura Ekle
             </Button>
+          </div>
+
+          {/* Fatura Türü Filtre Barı */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 p-3 rounded-lg border border-border">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">Fatura Türü Filtresi:</span>
+              <Select value={supplierTypeFilter} onValueChange={setSupplierTypeFilter}>
+                <SelectTrigger className="w-[220px] h-8 text-xs bg-card">
+                  <SelectValue placeholder="Tüm Fatura Türleri" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">🌐 Tüm Fatura Türleri</SelectItem>
+                  <SelectItem value="product">🛍️ Ürün Alımı (Stok Tedariği)</SelectItem>
+                  <SelectItem value="other">📝 Diğer / Genel Gider Faturası</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="text-xs font-semibold text-muted-foreground">
+              {filteredSupplierInvoices.length} Adet Fatura Kaydı
+            </div>
           </div>
 
           <div className="border border-border bg-card rounded-xl overflow-hidden">
@@ -748,7 +1184,7 @@ export default function CashLedger() {
                 </tr>
               </thead>
               <tbody>
-                {supplierInvoices.map(inv => {
+                {filteredSupplierInvoices.map(inv => {
                   const hasFile = !!inv.invoiceFile;
                   const isProductType = (inv.invoiceType || (inv.items && inv.items.length > 0 ? 'product' : 'other')) === 'product';
                   return (
@@ -816,18 +1252,23 @@ export default function CashLedger() {
                 })}
               </tbody>
             </table>
-            {supplierInvoices.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground">Tedarik kaydı bulunmuyor.</div>
+            {filteredSupplierInvoices.length === 0 && (
+              <div className="p-8 text-center text-muted-foreground">Seçilen tarih aralığında tedarik kaydı bulunmuyor.</div>
             )}
           </div>
         </TabsContent>
 
         {/* ==================== TAB 4: GELECEK BORÇLAR (PAYABLES) ==================== */}
         <TabsContent value="payables" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h2 className="text-lg font-bold">Gelecek Borçlar & Sabit Giderler</h2>
-              <p className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold">Gelecek Borçlar & Sabit Giderler</h2>
+                <Badge variant="secondary" className="bg-purple-500/10 text-purple-600 border border-purple-500/20 font-semibold text-xs">
+                  Filtrelenen Toplam Borç: {formatCurrency(totals.totalPayablesAmount, sym)}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Kredi kartı ekstreleri, dükkan kirası, elektrik/su/aidat ve kargo firması hakediş vadeleri.
               </p>
             </div>
@@ -849,7 +1290,7 @@ export default function CashLedger() {
                 </tr>
               </thead>
               <tbody>
-                {upcomingPayables.map(u => {
+                {filteredUpcomingPayables.map(u => {
                   const isPaid = u.status === 'paid';
                   const due = new Date(u.dueDate).getTime();
                   const now = new Date().getTime();
@@ -913,8 +1354,8 @@ export default function CashLedger() {
                 })}
               </tbody>
             </table>
-            {upcomingPayables.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground">Borç kaydı bulunmuyor.</div>
+            {filteredUpcomingPayables.length === 0 && (
+              <div className="p-8 text-center text-muted-foreground">Seçilen tarih aralığında borç kaydı bulunmuyor.</div>
             )}
           </div>
         </TabsContent>
