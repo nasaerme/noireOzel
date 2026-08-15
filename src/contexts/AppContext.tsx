@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
-import { Product, ProductVariant, Order, Expense, ExpenseCategory, Settings, CompetitorAd, CompetitorProfile, CashTransaction, BankAccount, CreditCard, SupplierInvoice, ExpectedPayout, UpcomingPayable } from '@/types';
+import { Product, ProductVariant, Order, Expense, ExpenseCategory, Settings, CompetitorAd, CompetitorProfile, CashTransaction, BankAccount, CreditCard, SupplierInvoice, ExpectedPayout, UpcomingPayable, OfficialInvoice } from '@/types';
 import { generateId, generateOrderNumber } from '@/utils/formatters';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ interface AppContextType {
   supplierInvoices: SupplierInvoice[];
   expectedPayouts: ExpectedPayout[];
   upcomingPayables: UpcomingPayable[];
+  officialInvoices: OfficialInvoice[];
   addProduct: (p: Omit<Product, 'id' | 'createdAt'>, newVariants?: Omit<ProductVariant, 'id' | 'productId'>[]) => Product;
   updateProduct: (p: Product) => void;
   deleteProduct: (id: string) => void;
@@ -23,6 +24,7 @@ interface AppContextType {
   addVariant: (v: Omit<ProductVariant, 'id'>) => ProductVariant;
   updateVariant: (v: ProductVariant) => void;
   deleteVariant: (id: string) => void;
+
   addOrder: (o: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Order;
   updateOrder: (o: Order) => void;
   deleteOrder: (id: string) => void;
@@ -64,9 +66,16 @@ interface AppContextType {
   addUpcomingPayable: (u: Omit<UpcomingPayable, 'id' | 'createdAt'>) => void;
   payUpcomingPayable: (id: string, paidFromAccountId: string, paymentMethod: 'cash' | 'bank_account' | 'credit_card') => void;
   deleteUpcomingPayable: (id: string) => void;
+  addOfficialInvoice: (i: Omit<OfficialInvoice, 'id' | 'createdAt'>) => void;
+  addOfficialInvoicesBatch: (invoices: Omit<OfficialInvoice, 'id' | 'createdAt'>[]) => Promise<void>;
+  fetchInvoiceFile: (id: string) => Promise<string | null>;
+  updateOfficialInvoice: (i: OfficialInvoice) => void;
+  deleteOfficialInvoice: (id: string) => void;
+  deleteOfficialInvoices: (ids: string[]) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
+
 
 export function useApp() {
   const ctx = useContext(AppContext);
@@ -98,6 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
   const [expectedPayouts, setExpectedPayouts] = useState<ExpectedPayout[]>([]);
   const [upcomingPayables, setUpcomingPayables] = useState<UpcomingPayable[]>([]);
+  const [officialInvoices, setOfficialInvoices] = useState<OfficialInvoice[]>([]);
 
   const defaultSettings: Settings = {
     language: 'tr', currency: 'TRY', currencySymbol: '₺', defaultTaxRate: 20, businessName: 'The Noire Co.', businessAddress: '', businessPhone: '', businessEmail: '', categories: [], competitors: [], expenseCategories: defaultExpenseCategories,
@@ -126,7 +136,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           supabase.from('credit_cards').select('*').order('created_at', { ascending: true }),
           supabase.from('supplier_invoices').select('*').order('created_at', { ascending: false }),
           supabase.from('expected_payouts').select('*').order('created_at', { ascending: false }),
-          supabase.from('upcoming_payables').select('*').order('created_at', { ascending: false })
+          supabase.from('upcoming_payables').select('*').order('created_at', { ascending: false }),
+          supabase.from('official_invoices').select('id, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at').order('date', { ascending: false })
         ]);
 
         const getResData = (idx: number) => {
@@ -154,6 +165,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const siD = getResData(11);
         const epD = getResData(12);
         const upD = getResData(13);
+        const oiD = getResData(14);
 
         const loadedExpCategories = ecD ? ecD.map((c: any) => ({ id: c.id, name: c.name, color: c.color })) : [];
 
@@ -310,6 +322,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
             id: u.id, title: u.title, category: u.category, amount: Number(u.amount),
             dueDate: u.due_date, status: u.status, paidFromAccountId: u.paid_from_account_id,
             paymentMethod: u.payment_method, notes: u.notes, createdAt: u.created_at
+          })));
+        }
+
+        if (oiD !== null) {
+          setOfficialInvoices(oiD.map((oi: any) => ({
+            id: oi.id,
+            type: oi.type as 'kestigim' | 'bana_kesilen',
+            invoiceNumber: oi.invoice_number,
+            date: oi.date,
+            partyName: oi.party_name,
+            partyTaxId: oi.party_tax_id || '',
+            description: oi.description,
+            category: oi.category || '',
+            subtotal: Number(oi.subtotal),
+            taxRate: Number(oi.tax_rate),
+            taxAmount: Number(oi.tax_amount),
+            totalAmount: Number(oi.total_amount),
+            invoiceFile: oi.invoice_file || '',
+            invoiceFileName: oi.invoice_file_name || '',
+            notes: oi.notes || '',
+            createdAt: oi.created_at
           })));
         }
       } catch (err) {
@@ -1190,6 +1223,146 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // --- OFFICIAL INVOICES ---
+  const addOfficialInvoice = useCallback((i: Omit<OfficialInvoice, 'id' | 'createdAt'>) => {
+    const id = generateId();
+    const createdAt = new Date().toISOString();
+    const newI: OfficialInvoice = { ...i, id, createdAt };
+
+    supabase.from('official_invoices').insert({
+      id,
+      type: i.type,
+      invoice_number: i.invoiceNumber,
+      date: i.date,
+      party_name: i.partyName,
+      party_tax_id: i.partyTaxId || null,
+      description: i.description,
+      category: i.category || null,
+      subtotal: i.subtotal,
+      tax_rate: i.taxRate,
+      tax_amount: i.taxAmount,
+      total_amount: i.totalAmount,
+      invoice_file: i.invoiceFile || null,
+      invoice_file_name: i.invoiceFileName || null,
+      notes: i.notes || null,
+      created_at: createdAt
+    }).then(({ error }) => {
+      if (error) {
+        console.error("Fatura ekleme DB hatası:", error);
+        toast.error("Fatura DB Kayıt Hatası: " + error.message);
+      } else {
+        setOfficialInvoices(prev => [newI, ...prev]);
+        toast.success("Fatura kaydedildi");
+      }
+    });
+  }, []);
+
+  const updateOfficialInvoice = useCallback((i: OfficialInvoice) => {
+    supabase.from('official_invoices').update({
+      type: i.type,
+      invoice_number: i.invoiceNumber,
+      date: i.date,
+      party_name: i.partyName,
+      party_tax_id: i.partyTaxId || null,
+      description: i.description,
+      category: i.category || null,
+      subtotal: i.subtotal,
+      tax_rate: i.taxRate,
+      tax_amount: i.taxAmount,
+      total_amount: i.totalAmount,
+      invoice_file: i.invoiceFile || null,
+      invoice_file_name: i.invoiceFileName || null,
+      notes: i.notes || null
+    }).eq('id', i.id).then(({ error }) => {
+      if (error) {
+        toast.error("Fatura Güncelleme DB Hatası: " + error.message);
+      } else {
+        setOfficialInvoices(prev => prev.map(x => x.id === i.id ? i : x));
+        toast.success("Fatura güncellendi");
+      }
+    });
+  }, []);
+
+  const addOfficialInvoicesBatch = useCallback(async (invoicesList: Omit<OfficialInvoice, 'id' | 'createdAt'>[]) => {
+    if (invoicesList.length === 0) return;
+    const createdAt = new Date().toISOString();
+
+    const createdInvoices: OfficialInvoice[] = invoicesList.map(i => ({
+      ...i,
+      id: generateId(),
+      createdAt
+    }));
+
+    const dbRows = createdInvoices.map(i => ({
+      id: i.id,
+      type: i.type,
+      invoice_number: i.invoiceNumber,
+      date: i.date,
+      party_name: i.partyName,
+      party_tax_id: i.partyTaxId || null,
+      description: i.description,
+      category: i.category || null,
+      subtotal: i.subtotal,
+      tax_rate: i.taxRate,
+      tax_amount: i.taxAmount,
+      total_amount: i.totalAmount,
+      invoice_file: i.invoiceFile || null,
+      invoice_file_name: i.invoiceFileName || null,
+      notes: i.notes || null,
+      created_at: createdAt
+    }));
+
+    const { error } = await supabase.from('official_invoices').insert(dbRows);
+    if (error) {
+      console.error("Toplu fatura ekleme DB hatası:", error);
+      toast.error("Toplu Fatura Kayıt Hatası: " + error.message);
+    } else {
+      setOfficialInvoices(prev => [...createdInvoices, ...prev]);
+      toast.success(`${createdInvoices.length} adet fatura başarıyla veritabanına aktarıldı!`);
+    }
+  }, []);
+
+  const fetchInvoiceFile = useCallback(async (id: string): Promise<string | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('official_invoices')
+        .select('invoice_file')
+        .eq('id', id)
+        .single();
+      if (error) {
+        console.error("Fatura dosyası getirme hatası:", error);
+        return null;
+      }
+      return data?.invoice_file || null;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  }, []);
+
+  const deleteOfficialInvoice = useCallback((id: string) => {
+    supabase.from('official_invoices').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        toast.error("Fatura Silme DB Hatası: " + error.message);
+      } else {
+        setOfficialInvoices(prev => prev.filter(x => x.id !== id));
+        toast.success("Fatura silindi");
+      }
+    });
+  }, []);
+
+  const deleteOfficialInvoices = useCallback((ids: string[]) => {
+    supabase.from('official_invoices').delete().in('id', ids).then(({ error }) => {
+      if (error) {
+        toast.error("Fatura Toplu Silme Hatası: " + error.message);
+      } else {
+        const idSet = new Set(ids);
+        setOfficialInvoices(prev => prev.filter(x => !idSet.has(x.id)));
+        toast.success("Faturalar silindi");
+      }
+    });
+  }, []);
+
   // --- HELPERS ---
   const getProduct = useCallback((id: string) => products.find(p => p.id === id), [products]);
   const getVariant = useCallback((id: string) => variants.find(v => v.id === id), [variants]);
@@ -1197,7 +1370,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const contextValue = useMemo(() => ({
     products, variants, orders, expenses, settings, competitorAds, competitorProfiles, cashTransactions,
-    bankAccounts, creditCards, supplierInvoices, expectedPayouts, upcomingPayables,
+    bankAccounts, creditCards, supplierInvoices, expectedPayouts, upcomingPayables, officialInvoices,
     addProduct, updateProduct, deleteProduct, deleteProducts,
     addVariant, updateVariant, deleteVariant,
     addOrder, updateOrder, deleteOrder, deleteOrders,
@@ -1211,9 +1384,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addSupplierInvoice, updateSupplierInvoice, deleteSupplierInvoice,
     addExpectedPayout, completeExpectedPayout, deleteExpectedPayout,
     addUpcomingPayable, payUpcomingPayable, deleteUpcomingPayable,
+    addOfficialInvoice, addOfficialInvoicesBatch, fetchInvoiceFile, updateOfficialInvoice, deleteOfficialInvoice, deleteOfficialInvoices,
   }), [
     products, variants, orders, expenses, settings, competitorAds, competitorProfiles, cashTransactions,
-    bankAccounts, creditCards, supplierInvoices, expectedPayouts, upcomingPayables,
+    bankAccounts, creditCards, supplierInvoices, expectedPayouts, upcomingPayables, officialInvoices,
     addProduct, updateProduct, deleteProduct, deleteProducts,
     addVariant, updateVariant, deleteVariant,
     addOrder, updateOrder, deleteOrder, deleteOrders,
@@ -1227,6 +1401,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addSupplierInvoice, updateSupplierInvoice, deleteSupplierInvoice,
     addExpectedPayout, completeExpectedPayout, deleteExpectedPayout,
     addUpcomingPayable, payUpcomingPayable, deleteUpcomingPayable,
+    addOfficialInvoice, addOfficialInvoicesBatch, fetchInvoiceFile, updateOfficialInvoice, deleteOfficialInvoice, deleteOfficialInvoices,
   ]);
 
   return (

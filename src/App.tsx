@@ -13,6 +13,7 @@ import Reports from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
 import CompetitorAds from "./pages/CompetitorAds";
 import CashLedger from "./pages/CashLedger";
+import Invoices from "./pages/Invoices";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,10 +31,11 @@ const App = () => (
               <Route path="/urunler" element={<Products />} />
               <Route path="/siparisler" element={<Orders />} />
               <Route path="/giderler" element={<Expenses />} />
+              <Route path="/mali-tablo" element={<CashLedger />} />
+              <Route path="/faturalar" element={<Invoices />} />
+              <Route path="/reklam-takip" element={<CompetitorAds />} />
               <Route path="/raporlar" element={<Reports />} />
               <Route path="/ayarlar" element={<SettingsPage />} />
-              <Route path="/reklam-takip" element={<CompetitorAds />} />
-              <Route path="/mali-tablo" element={<CashLedger />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AppLayout>

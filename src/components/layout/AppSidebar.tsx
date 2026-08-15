@@ -1,5 +1,5 @@
 import { 
-  LayoutDashboard, Package, ShoppingCart, Receipt, BarChart3, Settings, ChevronLeft, Megaphone, Wallet
+  LayoutDashboard, Package, ShoppingCart, Receipt, BarChart3, Settings, ChevronLeft, Megaphone, Wallet, FileText
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -16,6 +16,7 @@ const items = [
   { title: "Siparişler", url: "/siparisler", icon: ShoppingCart },
   { title: "Giderler", url: "/giderler", icon: Receipt },
   { title: "Mali Tablo", url: "/mali-tablo", icon: Wallet },
+  { title: "E-Fatura & Muhasebe", url: "/faturalar", icon: FileText },
   { title: "Reklam Takibi", url: "/reklam-takip", icon: Megaphone },
   { title: "Raporlar", url: "/raporlar", icon: BarChart3 },
   { title: "Ayarlar", url: "/ayarlar", icon: Settings },

@@ -200,6 +200,26 @@ CREATE TABLE IF NOT EXISTS upcoming_payables (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 10. OFFICIAL INVOICES (E-FATURA & ÖN MUHASEBE)
+CREATE TABLE IF NOT EXISTS official_invoices (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  type TEXT NOT NULL, -- 'kestigim' (giden/satış) or 'bana_kesilen' (gelen/gider)
+  invoice_number TEXT NOT NULL,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  party_name TEXT NOT NULL, -- Kime kesildi veya Kim kesti
+  party_tax_id TEXT, -- VKN / TCKN
+  description TEXT NOT NULL,
+  category TEXT,
+  subtotal DECIMAL(12,2) NOT NULL DEFAULT 0, -- Matrah (KDV Hariç)
+  tax_rate DECIMAL(5,2) NOT NULL DEFAULT 20.00, -- KDV Oranı (%)
+  tax_amount DECIMAL(12,2) NOT NULL DEFAULT 0, -- KDV Tutarı
+  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0, -- Brüt / KDV Dahil Genel Toplam
+  invoice_file TEXT, -- Base64 veya Dosya URL
+  invoice_file_name TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Disable Row Level Security (RLS) policies completely for direct client access
 ALTER TABLE products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE product_variants DISABLE ROW LEVEL SECURITY;
@@ -214,3 +234,5 @@ ALTER TABLE credit_cards DISABLE ROW LEVEL SECURITY;
 ALTER TABLE supplier_invoices DISABLE ROW LEVEL SECURITY;
 ALTER TABLE expected_payouts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE upcoming_payables DISABLE ROW LEVEL SECURITY;
+ALTER TABLE official_invoices DISABLE ROW LEVEL SECURITY;
+

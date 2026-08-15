@@ -235,4 +235,24 @@ export interface UpcomingPayable {
   createdAt: string;
 }
 
+export interface OfficialInvoice {
+  id: string;
+  type: 'kestigim' | 'bana_kesilen'; // 'kestigim' (Satış/Giden) | 'bana_kesilen' (Alış/Gider/Gelen)
+  invoiceNumber: string;
+  date: string;
+  partyName: string; // Kime kesildi (Müşteri/Firma) veya Kim kesti (Tedarikçi/Satıcı)
+  partyTaxId?: string; // VKN / TCKN
+  description: string;
+  category?: string;
+  subtotal: number; // Matrah (KDV Hariç)
+  taxRate: number; // KDV Oranı (%) e.g. 20, 10, 1
+  taxAmount: number; // KDV Tutarı
+  totalAmount: number; // Brüt / KDV Dahil Genel Toplam
+  invoiceFile?: string; // Base64 or URL
+  invoiceFileName?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+
 
