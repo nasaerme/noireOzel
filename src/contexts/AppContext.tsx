@@ -117,13 +117,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     shopifyWebhookSecret: import.meta.env.VITE_SHOPIFY_WEBHOOK_SECRET || ''
   };
 
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [settings, setSettings] = useState<Settings>(() => {
+    const local = localStorage.getItem('app_settings');
+    if (local) {
+      try {
+        return { ...defaultSettings, ...JSON.parse(local) };
+      } catch (e) {
+        console.error("Local settings load error:", e);
+      }
+    }
+    return defaultSettings;
+  });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const results = await Promise.allSettled([
-          supabase.from('settings').select('*').limit(1).single(),
+          supabase.from('settings').select('*').limit(1).maybeSingle(),
           supabase.from('expense_categories').select('*'),
           supabase.from('products').select('*'),
           supabase.from('product_variants').select('*'),
@@ -186,25 +196,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         if (setD) {
-          setSettings(prev => ({
-            ...prev,
-            language: setD.language || prev.language,
-            currency: setD.currency || prev.currency,
-            currencySymbol: setD.currency_symbol || prev.currencySymbol,
-            defaultTaxRate: setD.default_tax_rate ?? prev.defaultTaxRate,
-            businessName: setD.business_name || prev.businessName,
-            businessAddress: setD.business_address || prev.businessAddress,
-            businessPhone: setD.business_phone || prev.businessPhone,
-            businessEmail: setD.business_email || prev.businessEmail,
-            categories: setD.categories || prev.categories,
-            competitors: setD.competitors || prev.competitors,
-            expenseCategories: recoveredCategories,
-            defaultPaymentCommissionRate: setD.default_payment_commission_rate ?? prev.defaultPaymentCommissionRate,
-            defaultPaymentCommissionFixed: setD.default_payment_commission_fixed ?? prev.defaultPaymentCommissionFixed,
-            defaultShopifyCommissionRate: setD.default_shopify_commission_rate ?? prev.defaultShopifyCommissionRate,
-            defaultShopifyCommissionFixed: setD.default_shopify_commission_fixed ?? prev.defaultShopifyCommissionFixed,
-            defaultCashOnDeliveryFee: setD.default_cash_on_delivery_fee ?? prev.defaultCashOnDeliveryFee,
-          }));
+          setSettings(prev => {
+            const localSaved = localStorage.getItem('app_settings');
+            let localObj: Partial<Settings> | null = null;
+            if (localSaved) {
+              try { localObj = JSON.parse(localSaved); } catch (e) {}
+            }
+
+            const nextSettings = {
+              ...prev,
+              language: setD.language || prev.language,
+              currency: setD.currency || prev.currency,
+              currencySymbol: setD.currency_symbol || prev.currencySymbol,
+              defaultTaxRate: setD.default_tax_rate ?? prev.defaultTaxRate,
+              businessName: setD.business_name || prev.businessName,
+              businessAddress: setD.business_address || prev.businessAddress,
+              businessPhone: setD.business_phone || prev.businessPhone,
+              businessEmail: setD.business_email || prev.businessEmail,
+              categories: setD.categories || prev.categories,
+              competitors: setD.competitors || prev.competitors,
+              expenseCategories: recoveredCategories,
+              defaultPaymentCommissionRate: localObj?.defaultPaymentCommissionRate ?? setD.default_payment_commission_rate ?? prev.defaultPaymentCommissionRate,
+              defaultPaymentCommissionFixed: localObj?.defaultPaymentCommissionFixed ?? setD.default_payment_commission_fixed ?? prev.defaultPaymentCommissionFixed,
+              defaultShopifyCommissionRate: localObj?.defaultShopifyCommissionRate ?? setD.default_shopify_commission_rate ?? prev.defaultShopifyCommissionRate,
+              defaultShopifyCommissionFixed: localObj?.defaultShopifyCommissionFixed ?? setD.default_shopify_commission_fixed ?? prev.defaultShopifyCommissionFixed,
+              defaultCashOnDeliveryFee: localObj?.defaultCashOnDeliveryFee ?? setD.default_cash_on_delivery_fee ?? prev.defaultCashOnDeliveryFee,
+            };
+            try {
+              localStorage.setItem('app_settings', JSON.stringify(nextSettings));
+            } catch (e) {
+              console.error("LocalStorage save error:", e);
+            }
+            return nextSettings;
+          });
         }
 
         if (pD !== null) setProducts(pD.map((p: any) => ({
@@ -790,24 +814,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateSettings = useCallback((s: Partial<Settings>) => {
     setSettings(prev => { 
       const next = { ...prev, ...s };
-      
-      supabase.from('settings').select('id').limit(1).single().then(({ data }) => {
-        if (data) {
-          const updatePayload: any = {
-            language: next.language, currency: next.currency, currency_symbol: next.currencySymbol,
-            default_tax_rate: next.defaultTaxRate, business_name: next.businessName,
-            business_address: next.businessAddress, business_phone: next.businessPhone,
-            business_email: next.businessEmail, categories: next.categories, competitors: next.competitors,
-            default_payment_commission_rate: next.defaultPaymentCommissionRate,
-            default_payment_commission_fixed: next.defaultPaymentCommissionFixed,
-            default_shopify_commission_rate: next.defaultShopifyCommissionRate,
-            default_shopify_commission_fixed: next.defaultShopifyCommissionFixed,
-            default_cash_on_delivery_fee: next.defaultCashOnDeliveryFee
-          };
 
-          supabase.from('settings').update(updatePayload).eq('id', data.id).then(({ error }) => {
-            if (error) console.error("Ayarlar DB Güncelleme Hatası:", error);
-          });
+      try {
+        localStorage.setItem('app_settings', JSON.stringify(next));
+      } catch (e) {
+        console.error("LocalStorage save error:", e);
+      }
+      
+      supabase.from('settings').select('id').limit(1).maybeSingle().then(async ({ data }) => {
+        const fullPayload: any = {
+          language: next.language, currency: next.currency, currency_symbol: next.currencySymbol,
+          default_tax_rate: next.defaultTaxRate, business_name: next.businessName,
+          business_address: next.businessAddress, business_phone: next.businessPhone,
+          business_email: next.businessEmail, categories: next.categories, competitors: next.competitors,
+          default_payment_commission_rate: next.defaultPaymentCommissionRate,
+          default_payment_commission_fixed: next.defaultPaymentCommissionFixed,
+          default_shopify_commission_rate: next.defaultShopifyCommissionRate,
+          default_shopify_commission_fixed: next.defaultShopifyCommissionFixed,
+          default_cash_on_delivery_fee: next.defaultCashOnDeliveryFee
+        };
+
+        const basePayload: any = {
+          language: next.language, currency: next.currency, currency_symbol: next.currencySymbol,
+          default_tax_rate: next.defaultTaxRate, business_name: next.businessName,
+          business_address: next.businessAddress, business_phone: next.businessPhone,
+          business_email: next.businessEmail, categories: next.categories
+        };
+
+        if (data && data.id) {
+          const res = await supabase.from('settings').update(fullPayload).eq('id', data.id);
+          if (res.error) {
+            console.warn("Tam ayarlar güncelleme hatası, temel veriler kaydediliyor:", res.error.message);
+            await supabase.from('settings').update(basePayload).eq('id', data.id);
+          }
+        } else {
+          const res = await supabase.from('settings').insert([fullPayload]);
+          if (res.error) {
+            console.warn("Tam ayarlar ekleme hatası, temel veriler kaydediliyor:", res.error.message);
+            await supabase.from('settings').insert([basePayload]);
+          }
         }
       });
 

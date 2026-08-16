@@ -98,11 +98,23 @@ CREATE TABLE IF NOT EXISTS settings (
   business_phone TEXT,
   business_email TEXT,
   categories TEXT[] DEFAULT '{}',
+  competitors TEXT[] DEFAULT '{}',
+  default_payment_commission_rate DECIMAL(5,2) DEFAULT 2.49,
+  default_payment_commission_fixed DECIMAL(12,2) DEFAULT 0.25,
+  default_shopify_commission_rate DECIMAL(5,2) DEFAULT 2.00,
+  default_shopify_commission_fixed DECIMAL(12,2) DEFAULT 0.00,
+  default_cash_on_delivery_fee DECIMAL(12,2) DEFAULT 100.00,
   shopify_store_url TEXT,
   shopify_access_token TEXT,
   shopify_webhook_secret TEXT
 );
 
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS competitors TEXT[] DEFAULT '{}';
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_payment_commission_rate DECIMAL(5,2) DEFAULT 2.49;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_payment_commission_fixed DECIMAL(12,2) DEFAULT 0.25;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_shopify_commission_rate DECIMAL(5,2) DEFAULT 2.00;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_shopify_commission_fixed DECIMAL(12,2) DEFAULT 0.00;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_cash_on_delivery_fee DECIMAL(12,2) DEFAULT 100.00;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_store_url TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_access_token TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_webhook_secret TEXT;

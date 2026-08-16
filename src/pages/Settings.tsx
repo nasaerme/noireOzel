@@ -171,11 +171,11 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="text-xs font-medium">Kesinti Oranı (%)</Label>
-                        <Input type="number" step="0.01" value={form.defaultPaymentCommissionRate || 0} onChange={e => setForm({ ...form, defaultPaymentCommissionRate: Number(e.target.value) })} className="bg-background" />
+                        <Input type="number" step="0.01" value={form.defaultPaymentCommissionRate ?? 0} onChange={e => setForm({ ...form, defaultPaymentCommissionRate: Number(e.target.value) })} className="bg-background" />
                       </div>
                       <div className="space-y-2">
                         <Label className="text-xs font-medium">İşlem Başı Sabit Ücret ({form.currencySymbol})</Label>
-                        <Input type="number" step="0.01" value={form.defaultPaymentCommissionFixed || 0} onChange={e => setForm({ ...form, defaultPaymentCommissionFixed: Number(e.target.value) })} className="bg-background" />
+                        <Input type="number" step="0.01" value={form.defaultPaymentCommissionFixed ?? 0} onChange={e => setForm({ ...form, defaultPaymentCommissionFixed: Number(e.target.value) })} className="bg-background" />
                       </div>
                     </div>
                   </div>
@@ -186,11 +186,11 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="text-xs font-medium">Satış Oranı (%)</Label>
-                        <Input type="number" step="0.01" value={form.defaultShopifyCommissionRate || 0} onChange={e => setForm({ ...form, defaultShopifyCommissionRate: Number(e.target.value) })} className="bg-background" />
+                        <Input type="number" step="0.01" value={form.defaultShopifyCommissionRate ?? 0} onChange={e => setForm({ ...form, defaultShopifyCommissionRate: Number(e.target.value) })} className="bg-background" />
                       </div>
                       <div className="space-y-2">
                         <Label className="text-xs font-medium">İşlem Başı Sabit Ücret ({form.currencySymbol})</Label>
-                        <Input type="number" step="0.01" value={form.defaultShopifyCommissionFixed || 0} onChange={e => setForm({ ...form, defaultShopifyCommissionFixed: Number(e.target.value) })} className="bg-background" />
+                        <Input type="number" step="0.01" value={form.defaultShopifyCommissionFixed ?? 0} onChange={e => setForm({ ...form, defaultShopifyCommissionFixed: Number(e.target.value) })} className="bg-background" />
                       </div>
                     </div>
                   </div>
