@@ -47,6 +47,9 @@ export default function Invoices() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const [isCustomRange, setIsCustomRange] = useState<boolean>(false);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isParsingPdf, setIsParsingPdf] = useState(false);
@@ -404,14 +407,19 @@ export default function Invoices() {
 
   const filteredInvoices = useMemo(() => {
     return officialInvoices.filter(inv => {
-      if (selectedYear !== "all") {
-        const year = inv.date ? inv.date.split("-")[0] : "";
-        if (year !== selectedYear) return false;
-      }
+      if (isCustomRange) {
+        if (startDate && inv.date < startDate) return false;
+        if (endDate && inv.date > endDate) return false;
+      } else {
+        if (selectedYear !== "all") {
+          const year = inv.date ? inv.date.split("-")[0] : "";
+          if (year !== selectedYear) return false;
+        }
 
-      if (selectedMonth !== "all") {
-        const month = inv.date ? inv.date.split("-")[1] : "";
-        if (month !== selectedMonth) return false;
+        if (selectedMonth !== "all") {
+          const month = inv.date ? inv.date.split("-")[1] : "";
+          if (month !== selectedMonth) return false;
+        }
       }
 
       if (searchTerm.trim()) {
@@ -425,7 +433,7 @@ export default function Invoices() {
 
       return true;
     });
-  }, [officialInvoices, selectedYear, selectedMonth, searchTerm]);
+  }, [officialInvoices, isCustomRange, startDate, endDate, selectedYear, selectedMonth, searchTerm]);
 
   const issuedInvoices = useMemo(() => filteredInvoices.filter(i => i.type === "kestigim"), [filteredInvoices]);
   const receivedInvoices = useMemo(() => filteredInvoices.filter(i => i.type === "bana_kesilen"), [filteredInvoices]);
@@ -720,7 +728,10 @@ export default function Invoices() {
               />
             </div>
 
-            <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <Select value={selectedYear} onValueChange={(val) => {
+              setSelectedYear(val);
+              if (isCustomRange) setIsCustomRange(false);
+            }}>
               <SelectTrigger className="w-[130px]">
                 <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Yıl" />
@@ -733,8 +744,15 @@ export default function Invoices() {
               </SelectContent>
             </Select>
 
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-[140px]">
+            <Select value={isCustomRange ? "all" : selectedMonth} onValueChange={(val) => {
+              setSelectedMonth(val);
+              if (isCustomRange) {
+                setIsCustomRange(false);
+                setStartDate("");
+                setEndDate("");
+              }
+            }}>
+              <SelectTrigger className={`w-[140px] ${isCustomRange ? "opacity-60" : ""}`}>
                 <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Ay" />
               </SelectTrigger>
@@ -754,9 +772,90 @@ export default function Invoices() {
                 <SelectItem value="12">Aralık</SelectItem>
               </SelectContent>
             </Select>
+
+            <Button
+              type="button"
+              variant={isCustomRange ? "default" : "outline"}
+              className={`gap-2 text-xs transition-all ${
+                isCustomRange 
+                  ? "bg-primary text-primary-foreground shadow-sm" 
+                  : "border-dashed hover:border-primary/50 text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => {
+                const nextState = !isCustomRange;
+                setIsCustomRange(nextState);
+                if (nextState) {
+                  setSelectedMonth("all");
+                } else {
+                  setStartDate("");
+                  setEndDate("");
+                }
+              }}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              <span>Özel Tarih Aralığı</span>
+              {isCustomRange && (startDate || endDate) && (
+                <Badge variant="secondary" className="bg-primary-foreground/20 text-primary-foreground text-[10px] px-1 py-0 h-4 ml-1">
+                  Aktif
+                </Badge>
+              )}
+            </Button>
+
+            {isCustomRange && (
+              <div className="flex flex-wrap items-center gap-2 animate-fade-in bg-primary/5 p-1.5 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground font-medium pl-1">Başlangıç:</span>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-[135px] h-8 text-xs bg-background"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground font-medium">Bitiş:</span>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-[135px] h-8 text-xs bg-background"
+                  />
+                </div>
+                {(startDate || endDate) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setStartDate("");
+                      setEndDate("");
+                    }}
+                    className="h-8 text-xs px-2 text-muted-foreground hover:text-foreground"
+                  >
+                    Temizle
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
-          <div className="text-xs text-muted-foreground flex items-center gap-4">
+          <div className="text-xs text-muted-foreground flex items-center gap-3">
+            {(selectedYear !== "all" || selectedMonth !== "all" || searchTerm || isCustomRange || startDate || endDate) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedYear("all");
+                  setSelectedMonth("all");
+                  setIsCustomRange(false);
+                  setSearchTerm("");
+                  setStartDate("");
+                  setEndDate("");
+                }}
+                className="h-7 text-xs px-2 text-muted-foreground border-dashed"
+              >
+                Filtreleri Sıfırla
+              </Button>
+            )}
             <span>Listelenen: <strong className="text-foreground">{filteredInvoices.length}</strong> fatura</span>
           </div>
         </CardContent>

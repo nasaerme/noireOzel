@@ -130,24 +130,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
+    const fetchAllFromSupabase = async (tableName: string, selectQuery: string = '*', orderCol?: string, ascending: boolean = false) => {
+      let allRows: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = supabase.from(tableName).select(selectQuery);
+        if (orderCol) {
+          query = query.order(orderCol, { ascending });
+        }
+        query = query.range(page * pageSize, (page + 1) * pageSize - 1);
+
+        const { data, error } = await query;
+        if (error) {
+          console.error(`DB Fetch Error [Table: ${tableName}]:`, error);
+          return { data: null, error };
+        }
+
+        if (data && data.length > 0) {
+          allRows = allRows.concat(data);
+          if (data.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      return { data: allRows, error: null };
+    };
+
     const fetchData = async () => {
       try {
         const results = await Promise.allSettled([
           supabase.from('settings').select('*').limit(1).maybeSingle(),
-          supabase.from('expense_categories').select('*'),
-          supabase.from('products').select('*'),
-          supabase.from('product_variants').select('*'),
-          supabase.from('expenses').select('*'),
-          supabase.from('competitor_ads').select('*').order('created_at', { ascending: false }),
-          supabase.from('competitor_profiles').select('*').order('created_at', { ascending: false }),
-          supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false }),
-          supabase.from('cash_ledger').select('*').order('date', { ascending: false }),
-          supabase.from('bank_accounts').select('*').order('created_at', { ascending: true }),
-          supabase.from('credit_cards').select('*').order('created_at', { ascending: true }),
-          supabase.from('supplier_invoices').select('*').order('created_at', { ascending: false }),
-          supabase.from('expected_payouts').select('*').order('created_at', { ascending: false }),
-          supabase.from('upcoming_payables').select('*').order('created_at', { ascending: false }),
-          supabase.from('official_invoices').select('id, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at').order('date', { ascending: false })
+          fetchAllFromSupabase('expense_categories'),
+          fetchAllFromSupabase('products'),
+          fetchAllFromSupabase('product_variants'),
+          fetchAllFromSupabase('expenses'),
+          fetchAllFromSupabase('competitor_ads', '*', 'created_at', false),
+          fetchAllFromSupabase('competitor_profiles', '*', 'created_at', false),
+          fetchAllFromSupabase('orders', '*, order_items(*)', 'created_at', false),
+          fetchAllFromSupabase('cash_ledger', '*', 'date', false),
+          fetchAllFromSupabase('bank_accounts', '*', 'created_at', true),
+          fetchAllFromSupabase('credit_cards', '*', 'created_at', true),
+          fetchAllFromSupabase('supplier_invoices', '*', 'created_at', false),
+          fetchAllFromSupabase('expected_payouts', '*', 'created_at', false),
+          fetchAllFromSupabase('upcoming_payables', '*', 'created_at', false),
+          fetchAllFromSupabase('official_invoices', 'id, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at', 'date', false)
         ]);
 
         const getResData = (idx: number) => {
