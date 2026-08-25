@@ -31,6 +31,12 @@ export interface OrderItem {
   isGift: boolean;
 }
 
+export interface CarrierCodTier {
+  minAmount: number;
+  maxAmount: number;
+  fee: number;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -49,8 +55,10 @@ export interface Order {
   orderDate: string;
   paymentStatus?: string;
   orderStatus?: string;
-  paymentMethod?: string; // 'kredi_karti', 'kapida_odeme', 'havale'
-  codFee?: number; // Kapıda Ödeme Hizmet Bedeli
+  paymentMethod?: 'online_kredi_karti' | 'kapida_odeme_kk' | 'kapida_odeme_nakit' | 'havale_eft' | 'kredi_karti' | 'kapida_odeme' | 'havale' | string;
+  codFee?: number; // Müşteriden alınan Kapıda Ödeme Hizmet Bedeli
+  carrierCodFee?: number; // Kargo Firmasının Kestiği Kapıda Ödeme Hizmet Bedeli (Sabit/Oran)
+  carrierCodFeeType?: 'fixed' | 'percentage' | 'tiered'; // Kargo Hizmet Bedeli Tipi ('fixed' = TL, 'percentage' = %, 'tiered' = Kademeli Tarife)
   cancellationReason?: string; // İptal veya İade Nedeni
   city: string;
   district: string;
@@ -92,6 +100,13 @@ export interface Settings {
   defaultShopifyCommissionRate: number;
   defaultShopifyCommissionFixed: number;
   defaultCashOnDeliveryFee?: number;
+  defaultOnlineCcRate?: number;
+  defaultCodCcRate?: number;
+  defaultCodCashRate?: number;
+  defaultBankTransferRate?: number;
+  defaultCarrierCodFee?: number;
+  defaultCarrierCodFeeType?: 'fixed' | 'percentage' | 'tiered';
+  defaultCarrierCodTiers?: CarrierCodTier[];
   shopifyStoreUrl?: string;
   shopifyAccessToken?: string;
   shopifyWebhookSecret?: string;
@@ -110,6 +125,7 @@ export interface OrderCalculation {
   paymentCommissionCost: number;
   shopifyCommissionCost: number;
   totalCommissionCost: number;
+  carrierCodFeeCost: number;
   extraExpense: number;
   totalCost: number;
   grossProfit: number;

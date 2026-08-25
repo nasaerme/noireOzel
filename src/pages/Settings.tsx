@@ -162,45 +162,112 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Otomatik Uygulama Giderleri</h4>
+                <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Otomatik Ödeme Komisyonları & Hizmet Kesintileri</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   
                   <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors">
-                    <h5 className="font-semibold text-sm flex items-center gap-2">💳 Ödeme Sağlayıcı Altyapısı</h5>
-                    <p className="text-xs text-muted-foreground leading-relaxed h-12">Iyzico, Stripe veya Banka Sanal POS gibi ödeme kuruluşlarının aldığı kesintiler.</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium">Kesinti Oranı (%)</Label>
-                        <Input type="number" step="0.01" value={form.defaultPaymentCommissionRate ?? 0} onChange={e => setForm({ ...form, defaultPaymentCommissionRate: Number(e.target.value) })} className="bg-background" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium">İşlem Başı Sabit Ücret ({form.currencySymbol})</Label>
-                        <Input type="number" step="0.01" value={form.defaultPaymentCommissionFixed ?? 0} onChange={e => setForm({ ...form, defaultPaymentCommissionFixed: Number(e.target.value) })} className="bg-background" />
-                      </div>
+                    <h5 className="font-semibold text-sm flex items-center gap-2">💳 Online Kredi Kartı Komisyonu</h5>
+                    <p className="text-xs text-muted-foreground leading-relaxed h-10">PayTR, İyzico vb. online sanal POS komisyon oranı.</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Komisyon Oranı (%)</Label>
+                      <Input type="number" step="0.01" value={form.defaultOnlineCcRate ?? 3.29} onChange={e => setForm({ ...form, defaultOnlineCcRate: Number(e.target.value) })} className="bg-background" />
                     </div>
                   </div>
 
                   <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors">
+                    <h5 className="font-semibold text-sm flex items-center gap-2">📱 Kapıda Ödeme (Kredi Kartı) Komisyonu</h5>
+                    <p className="text-xs text-muted-foreground leading-relaxed h-10">Kargo kuryesi mobil POS cihazı kart komisyonu.</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Komisyon Oranı (%)</Label>
+                      <Input type="number" step="0.01" value={form.defaultCodCcRate ?? 2.80} onChange={e => setForm({ ...form, defaultCodCcRate: Number(e.target.value) })} className="bg-background" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors">
+                    <h5 className="font-semibold text-sm flex items-center gap-2">💵 Kapıda Ödeme (Nakit) Komisyonu</h5>
+                    <p className="text-xs text-muted-foreground leading-relaxed h-10">Nakit ödemede uygulanan kart komisyonu (Varsayılan: %0).</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Komisyon Oranı (%)</Label>
+                      <Input type="number" step="0.01" value={form.defaultCodCashRate ?? 0} onChange={e => setForm({ ...form, defaultCodCashRate: Number(e.target.value) })} className="bg-background" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors">
+                    <h5 className="font-semibold text-sm flex items-center gap-2">🏛️ Havale / EFT Komisyonu</h5>
+                    <p className="text-xs text-muted-foreground leading-relaxed h-10">Banka havalesinde komisyon (Varsayılan: %0).</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Komisyon Oranı (%)</Label>
+                      <Input type="number" step="0.01" value={form.defaultBankTransferRate ?? 0} onChange={e => setForm({ ...form, defaultBankTransferRate: Number(e.target.value) })} className="bg-background" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors">
+                    <h5 className="font-semibold text-sm flex items-center gap-2">📦 Müşteriden Alınan Kapıda Ödeme Bedeli</h5>
+                    <p className="text-xs text-muted-foreground leading-relaxed h-10">Kapıda ödemede müşterinin sepetine eklenen ücret.</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Tutar ({form.currencySymbol})</Label>
+                      <Input type="number" step="1" value={form.defaultCashOnDeliveryFee ?? 100} onChange={e => setForm({ ...form, defaultCashOnDeliveryFee: Number(e.target.value) })} className="bg-background" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors sm:col-span-2">
+                    <h5 className="font-semibold text-sm flex items-center gap-2">🚚 Kargo Firması Kapıda Ödeme Hizmet Kesintisi</h5>
+                    <p className="text-xs text-muted-foreground leading-relaxed">Kargo firmasının tahsilatlı kargo (Taşınan Ürün Bedeli) için bizden kestiği hizmet bedeli.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium">Kesinti Hesaplama Tipi</Label>
+                        <Select value={form.defaultCarrierCodFeeType || 'tiered'} onValueChange={(v: 'fixed' | 'percentage' | 'tiered') => setForm({ ...form, defaultCarrierCodFeeType: v })}>
+                          <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="tiered">📊 Kademeli Tarife (2026-II TK 1 Tablosu)</SelectItem>
+                            <SelectItem value="fixed">Sabit Tutar ({form.currencySymbol})</SelectItem>
+                            <SelectItem value="percentage">Oransal (%)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {form.defaultCarrierCodFeeType !== 'tiered' && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-medium">Değer</Label>
+                          <Input type="number" step="0.1" value={form.defaultCarrierCodFee ?? 30} onChange={e => setForm({ ...form, defaultCarrierCodFee: Number(e.target.value) })} className="bg-background" />
+                        </div>
+                      )}
+                    </div>
+
+                    {(form.defaultCarrierCodFeeType === 'tiered' || !form.defaultCarrierCodFeeType) && (
+                      <div className="mt-3 p-4 bg-background/80 rounded-xl border border-border/50 text-xs space-y-2">
+                        <div className="flex justify-between items-center pb-2 border-b border-border/40 font-semibold text-primary">
+                          <span>2026 - II Taşınan Ürün Bedeli Tarife Tablosu</span>
+                          <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">TK 1 Otomatik</Badge>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-[11px]">
+                          <div className="p-2 bg-secondary/30 rounded border">0 - 400 TL: <strong>18,49 ₺</strong></div>
+                          <div className="p-2 bg-secondary/30 rounded border">401 - 500 TL: <strong>20,60 ₺</strong></div>
+                          <div className="p-2 bg-secondary/30 rounded border">501 - 600 TL: <strong>22,71 ₺</strong></div>
+                          <div className="p-2 bg-secondary/30 rounded border">601 - 1.250 TL: <strong>33,28 ₺</strong></div>
+                          <div className="p-2 bg-secondary/30 rounded border">1.251 - 2.500 TL: <strong>54,40 ₺</strong></div>
+                          <div className="p-2 bg-secondary/30 rounded border">2.501 - 3.750 TL: <strong>75,53 ₺</strong></div>
+                          <div className="p-2 bg-secondary/30 rounded border">3.751 - 5.000 TL: <strong>96,65 ₺</strong></div>
+                          <div className="p-2 bg-secondary/30 rounded border">5.001 - 6.249 TL: <strong>117,78 ₺</strong></div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground pt-1 italic">
+                          ℹ️ 6.250 TL üzerindeki tutarlarda sabit 117,78 ₺ + 6.250 TL üzerindeki kısmın %1'i olarak otomatik hesaplanır.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors">
                     <h5 className="font-semibold text-sm flex items-center gap-2">🛍️ Platform & Pazaryeri Komisyonu</h5>
-                    <p className="text-xs text-muted-foreground leading-relaxed h-12">Shopify, Trendyol, Hepsiburada gibi satış yapılan altyapının kestiği komisyon.</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed h-10">Shopify vb. altyapının kestiği komisyon.</p>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="text-xs font-medium">Satış Oranı (%)</Label>
                         <Input type="number" step="0.01" value={form.defaultShopifyCommissionRate ?? 0} onChange={e => setForm({ ...form, defaultShopifyCommissionRate: Number(e.target.value) })} className="bg-background" />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-xs font-medium">İşlem Başı Sabit Ücret ({form.currencySymbol})</Label>
+                        <Label className="text-xs font-medium">Sabit Ücret ({form.currencySymbol})</Label>
                         <Input type="number" step="0.01" value={form.defaultShopifyCommissionFixed ?? 0} onChange={e => setForm({ ...form, defaultShopifyCommissionFixed: Number(e.target.value) })} className="bg-background" />
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 bg-secondary/20 p-5 rounded-2xl border border-border/40 hover:border-border/80 transition-colors">
-                    <h5 className="font-semibold text-sm flex items-center gap-2">📦 Kapıda Ödeme Hizmet Bedeli</h5>
-                    <p className="text-xs text-muted-foreground leading-relaxed h-12">Kapıda ödemeli sipariş oluşturulduğunda otomatik eklenecek varsayılan hizmet tutarı.</p>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium">Hizmet Bedeli ({form.currencySymbol})</Label>
-                      <Input type="number" step="1" value={form.defaultCashOnDeliveryFee ?? 100} onChange={e => setForm({ ...form, defaultCashOnDeliveryFee: Number(e.target.value) })} className="bg-background max-w-[200px]" />
                     </div>
                   </div>
 

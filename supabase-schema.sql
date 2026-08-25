@@ -64,15 +64,25 @@ CREATE TABLE IF NOT EXISTS orders (
   extra_expense DECIMAL(12,2) NOT NULL DEFAULT 0,
   notes TEXT,
   order_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  payment_status TEXT NOT NULL DEFAULT 'beklemede', -- 'beklemede', 'odendi', 'iptal'
+  payment_status TEXT NOT NULL DEFAULT 'beklemede', -- 'beklemede', 'odendi', 'iptal', 'iade'
   order_status TEXT NOT NULL DEFAULT 'yeni', -- 'yeni', 'hazirlaniyor', 'kargoda', 'teslim_edildi', 'iptal', 'iade'
+  payment_method TEXT,
+  cod_fee DECIMAL(12,2) DEFAULT 0,
+  carrier_cod_fee DECIMAL(12,2) DEFAULT 0,
+  carrier_cod_fee_type TEXT DEFAULT 'fixed',
   cancellation_reason TEXT,
   city TEXT,
   district TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cod_fee DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS carrier_cod_fee DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS carrier_cod_fee_type TEXT DEFAULT 'fixed';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS district TEXT;
 
 -- ORDER ITEMS
 CREATE TABLE IF NOT EXISTS order_items (
@@ -104,6 +114,12 @@ CREATE TABLE IF NOT EXISTS settings (
   default_shopify_commission_rate DECIMAL(5,2) DEFAULT 2.00,
   default_shopify_commission_fixed DECIMAL(12,2) DEFAULT 0.00,
   default_cash_on_delivery_fee DECIMAL(12,2) DEFAULT 100.00,
+  default_online_cc_rate DECIMAL(5,2) DEFAULT 3.29,
+  default_cod_cc_rate DECIMAL(5,2) DEFAULT 2.80,
+  default_cod_cash_rate DECIMAL(5,2) DEFAULT 0.00,
+  default_bank_transfer_rate DECIMAL(5,2) DEFAULT 0.00,
+  default_carrier_cod_fee DECIMAL(12,2) DEFAULT 54.40,
+  default_carrier_cod_fee_type TEXT DEFAULT 'fixed',
   shopify_store_url TEXT,
   shopify_access_token TEXT,
   shopify_webhook_secret TEXT
@@ -115,6 +131,12 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_payment_commission_fixed D
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_shopify_commission_rate DECIMAL(5,2) DEFAULT 2.00;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_shopify_commission_fixed DECIMAL(12,2) DEFAULT 0.00;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_cash_on_delivery_fee DECIMAL(12,2) DEFAULT 100.00;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_online_cc_rate DECIMAL(5,2) DEFAULT 3.29;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_cod_cc_rate DECIMAL(5,2) DEFAULT 2.80;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_cod_cash_rate DECIMAL(5,2) DEFAULT 0.00;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_bank_transfer_rate DECIMAL(5,2) DEFAULT 0.00;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_carrier_cod_fee DECIMAL(12,2) DEFAULT 54.40;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_carrier_cod_fee_type TEXT DEFAULT 'fixed';
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_store_url TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_access_token TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS shopify_webhook_secret TEXT;
@@ -162,22 +184,21 @@ CREATE TABLE IF NOT EXISTS supplier_invoices (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   supplier_name TEXT NOT NULL,
-  invoice_type TEXT NOT NULL DEFAULT 'product', -- 'product' (Çoklu Ürün) or 'other' (Diğer Gider)
+  invoice_type TEXT NOT NULL DEFAULT 'product',
   items_summary TEXT NOT NULL,
   items JSONB DEFAULT '[]'::jsonb,
   subtotal DECIMAL(12,2) DEFAULT 0,
   total_tax DECIMAL(12,2) DEFAULT 0,
   amount DECIMAL(12,2) NOT NULL DEFAULT 0,
-  payment_method TEXT NOT NULL DEFAULT 'cash', -- 'cash', 'bank_account', 'credit_card'
+  payment_method TEXT NOT NULL DEFAULT 'cash',
   source_account_id UUID,
-  invoice_file TEXT, -- Base64 veya Dosya URL
+  invoice_file TEXT,
   invoice_file_name TEXT,
-  invoice_status TEXT NOT NULL DEFAULT 'pending', -- 'received', 'pending'
+  invoice_status TEXT NOT NULL DEFAULT 'pending',
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Add new columns if supplier_invoices table already exists in DB
 ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS invoice_type TEXT DEFAULT 'product';
 ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS subtotal DECIMAL(12,2) DEFAULT 0;
@@ -188,11 +209,11 @@ CREATE TABLE IF NOT EXISTS expected_payouts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
   order_number TEXT,
-  source TEXT NOT NULL, -- 'paytr', 'kapida_odeme', 'diger'
+  source TEXT NOT NULL,
   amount DECIMAL(12,2) NOT NULL DEFAULT 0,
   order_date TIMESTAMPTZ DEFAULT NOW(),
   expected_payout_date DATE NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'completed'
+  status TEXT NOT NULL DEFAULT 'pending',
   received_account_id UUID,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -202,10 +223,10 @@ CREATE TABLE IF NOT EXISTS expected_payouts (
 CREATE TABLE IF NOT EXISTS upcoming_payables (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
-  category TEXT NOT NULL, -- 'kredi_karti', 'kira', 'aidat', 'fatura', 'kargo', 'shopify', 'diger'
+  category TEXT NOT NULL,
   amount DECIMAL(12,2) NOT NULL DEFAULT 0,
   due_date DATE NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'paid'
+  status TEXT NOT NULL DEFAULT 'pending',
   paid_from_account_id UUID,
   payment_method TEXT,
   notes TEXT,
@@ -215,18 +236,18 @@ CREATE TABLE IF NOT EXISTS upcoming_payables (
 -- 10. OFFICIAL INVOICES (E-FATURA & ÖN MUHASEBE)
 CREATE TABLE IF NOT EXISTS official_invoices (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  type TEXT NOT NULL, -- 'kestigim' (giden/satış) or 'bana_kesilen' (gelen/gider)
+  type TEXT NOT NULL,
   invoice_number TEXT NOT NULL,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
-  party_name TEXT NOT NULL, -- Kime kesildi veya Kim kesti
-  party_tax_id TEXT, -- VKN / TCKN
+  party_name TEXT NOT NULL,
+  party_tax_id TEXT,
   description TEXT NOT NULL,
   category TEXT,
-  subtotal DECIMAL(12,2) NOT NULL DEFAULT 0, -- Matrah (KDV Hariç)
-  tax_rate DECIMAL(5,2) NOT NULL DEFAULT 20.00, -- KDV Oranı (%)
-  tax_amount DECIMAL(12,2) NOT NULL DEFAULT 0, -- KDV Tutarı
-  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0, -- Brüt / KDV Dahil Genel Toplam
-  invoice_file TEXT, -- Base64 veya Dosya URL
+  subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+  tax_rate DECIMAL(5,2) NOT NULL DEFAULT 20.00,
+  tax_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  invoice_file TEXT,
   invoice_file_name TEXT,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -247,4 +268,3 @@ ALTER TABLE supplier_invoices DISABLE ROW LEVEL SECURITY;
 ALTER TABLE expected_payouts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE upcoming_payables DISABLE ROW LEVEL SECURITY;
 ALTER TABLE official_invoices DISABLE ROW LEVEL SECURITY;
-

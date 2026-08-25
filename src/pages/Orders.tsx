@@ -73,7 +73,19 @@ export default function Orders() {
       if (startDate && new Date(o.orderDate) < new Date(startDate)) return false;
       if (endDate && new Date(o.orderDate) > new Date(endDate + 'T23:59:59')) return false;
 
-      if (paymentMethodFilter !== "all" && o.paymentMethod !== paymentMethodFilter) return false;
+      if (paymentMethodFilter !== "all") {
+        if (paymentMethodFilter === 'online_kredi_karti') {
+          if (o.paymentMethod !== 'online_kredi_karti' && o.paymentMethod !== 'kredi_karti') return false;
+        } else if (paymentMethodFilter === 'kapida_odeme_kk') {
+          if (o.paymentMethod !== 'kapida_odeme_kk') return false;
+        } else if (paymentMethodFilter === 'kapida_odeme_nakit') {
+          if (o.paymentMethod !== 'kapida_odeme_nakit' && o.paymentMethod !== 'kapida_odeme') return false;
+        } else if (paymentMethodFilter === 'havale_eft') {
+          if (o.paymentMethod !== 'havale_eft' && o.paymentMethod !== 'havale') return false;
+        } else if (o.paymentMethod !== paymentMethodFilter) {
+          return false;
+        }
+      }
       if (paymentStatusFilter !== "all") {
         const pStatus = o.paymentStatus || 'beklemede';
         if (pStatus !== paymentStatusFilter) return false;
@@ -169,9 +181,10 @@ export default function Orders() {
           <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Ödeme Yöntemi" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tüm Ödeme Yöntemleri</SelectItem>
-            <SelectItem value="kredi_karti">💳 Kredi Kartı</SelectItem>
-            <SelectItem value="kapida_odeme">📦 Kapıda Ödeme</SelectItem>
-            <SelectItem value="havale">🏦 EFT / Havale</SelectItem>
+            <SelectItem value="online_kredi_karti">💳 Online Kredi Kartı</SelectItem>
+            <SelectItem value="kapida_odeme_kk">📱 Kapıda Ödeme (Kredi Kartı)</SelectItem>
+            <SelectItem value="kapida_odeme_nakit">💵 Kapıda Ödeme (Nakit)</SelectItem>
+            <SelectItem value="havale_eft">🏛️ Havale / EFT</SelectItem>
           </SelectContent>
         </Select>
 
@@ -252,18 +265,23 @@ export default function Orders() {
                     <td className="p-3 font-semibold font-mono">{o.orderNumber}</td>
                     <td className="p-3 text-muted-foreground text-xs">{formatDate(o.orderDate)}</td>
                     <td className="p-3">
-                      {o.paymentMethod === 'kapida_odeme' ? (
+                      {o.paymentMethod === 'kapida_odeme_kk' ? (
                         <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30 text-[11px]">
-                          📦 Kapıda Ödeme
-                          {o.codFee > 0 && <span className="font-semibold text-[10px] ml-0.5">(+{o.codFee}₺)</span>}
+                          📱 Kapıda (KK)
+                          {o.codFee && o.codFee > 0 ? <span className="font-semibold text-[10px] ml-0.5">(+{o.codFee}₺)</span> : null}
                         </Badge>
-                      ) : o.paymentMethod === 'havale' ? (
+                      ) : o.paymentMethod === 'kapida_odeme_nakit' || o.paymentMethod === 'kapida_odeme' ? (
+                        <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30 text-[11px]">
+                          💵 Kapıda (Nakit)
+                          {o.codFee && o.codFee > 0 ? <span className="font-semibold text-[10px] ml-0.5">(+{o.codFee}₺)</span> : null}
+                        </Badge>
+                      ) : o.paymentMethod === 'havale_eft' || o.paymentMethod === 'havale' ? (
                         <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-[11px]">
-                          🏦 EFT / Havale
+                          🏛️ Havale / EFT
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[11px]">
-                          💳 Kredi Kartı
+                          💳 Online KK
                         </Badge>
                       )}
                     </td>
@@ -370,9 +388,9 @@ export default function Orders() {
       {/* Dialogs */}
       {createOpen && (
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Yeni Sipariş Oluştur</DialogTitle>
+              <DialogTitle className="text-base font-bold">Yeni Sipariş Oluştur</DialogTitle>
               <DialogDescription className="sr-only">Yeni sipariş oluşturma formu</DialogDescription>
             </DialogHeader>
             <OrderCreate onClose={() => setCreateOpen(false)} />
@@ -382,9 +400,9 @@ export default function Orders() {
 
       {detailOrder && (
         <Dialog open={!!detailOrder} onOpenChange={() => setDetailOrder(null)}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Sipariş Detayı - {detailOrder.orderNumber}</DialogTitle>
+              <DialogTitle className="text-base font-bold">Sipariş Detayı - {detailOrder.orderNumber}</DialogTitle>
               <DialogDescription className="sr-only">Sipariş ayrıntıları ve tutarlar</DialogDescription>
             </DialogHeader>
             <OrderDetail 
@@ -400,7 +418,7 @@ export default function Orders() {
 
       {editOrder && (
         <Dialog open={!!editOrder} onOpenChange={() => setEditOrder(null)}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Siparişi Düzenle - {editOrder.orderNumber}</DialogTitle>
               <DialogDescription className="sr-only">Sipariş düzenleme formu</DialogDescription>
@@ -503,9 +521,9 @@ function OrderDetail({
   onAction?: (order: Order, type: 'iade' | 'iptal') => void;
 }) {
   const calc = calculateOrder(order);
-  const isCOD = order.paymentMethod === 'kapida_odeme';
+  const isCOD = order.paymentMethod === 'kapida_odeme' || order.paymentMethod === 'kapida_odeme_kk' || order.paymentMethod === 'kapida_odeme_nakit';
   const isReturned = order.orderStatus === 'iade' || order.paymentStatus === 'iade';
-  const isCC = order.paymentMethod === 'kredi_karti';
+  const isCC = order.paymentMethod === 'kredi_karti' || order.paymentMethod === 'online_kredi_karti';
 
   return (
     <div className="space-y-4 text-xs">
@@ -542,8 +560,8 @@ function OrderDetail({
             {isReturned
               ? 'İadelerde gidiş (%100) + dönüş (%100) kargo maliyet kaybı hesaba katılmıştır.'
               : isCC
-              ? 'Kredi kartı iptallerinde ürün kargolanmadığı için kargo maliyeti yansıtılmamıştır (₺0,00).'
-              : 'Kapıda ödeme iptallerinde gidiş kargosu (%100) + dönüş kargosu (%50) zararı yansıtılmıştır.'}
+              ? 'Online Kredi Kartı iptallerinde ürün kargolanmadığı için kargo maliyeti yansıtılmamıştır (₺0,00).'
+              : 'Kapıda ödeme iptallerinde gidiş kargosu (%100) + dönüş kargosu (%50) zararı ve kargo hizmet kesintisi yansıtılmıştır.'}
           </p>
           {order.cancellationReason && (
             <p className="text-xs pt-1.5 border-t border-destructive/20 font-medium">
@@ -576,7 +594,7 @@ function OrderDetail({
 
       <div className="bg-secondary/50 rounded-lg p-4 space-y-2 text-sm">
         <Row label="Ara Toplam" value={formatCurrency(calc.subtotal, sym)} />
-        {isCOD && calc.codFee > 0 && <Row label="Kapıda Ödeme Hizmet Bedeli" value={`+${formatCurrency(calc.codFee, sym)}`} accent />}
+        {isCOD && calc.codFee > 0 && <Row label="Müşteri Kapıda Ödeme Hizmet Bedeli" value={`+${formatCurrency(calc.codFee, sym)}`} accent />}
         <Row label="Toplam İndirim" value={`-${formatCurrency(calc.totalDiscount, sym)}`} />
         <Row label="Sipariş Toplamı" value={formatCurrency(calc.taxableAmount, sym)} bold />
         <div className="border-t border-border my-2" />
@@ -585,6 +603,7 @@ function OrderDetail({
         <Row label="Ürün Maliyeti" value={formatCurrency(calc.totalProductCost, sym)} />
         {calc.giftCost > 0 && <Row label="Hediye Maliyeti" value={formatCurrency(calc.giftCost, sym)} />}
         <Row label="Kargo Maliyeti" value={formatCurrency(calc.shippingCost, sym)} />
+        {calc.carrierCodFeeCost > 0 && <Row label="Kargo Kapıda Öd. Kesintisi" value={formatCurrency(calc.carrierCodFeeCost, sym)} />}
         <Row label="Ambalaj Maliyeti" value={formatCurrency(calc.packagingCost, sym)} />
         <Row label="Ödeme Komisyonu" value={formatCurrency(calc.paymentCommissionCost, sym)} />
         <Row label="Shopify Komisyonu" value={formatCurrency(calc.shopifyCommissionCost, sym)} />

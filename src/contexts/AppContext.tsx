@@ -111,7 +111,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const defaultSettings: Settings = {
     language: 'tr', currency: 'TRY', currencySymbol: '₺', defaultTaxRate: 20, businessName: 'The Noire Co.', businessAddress: '', businessPhone: '', businessEmail: '', categories: [], competitors: [], expenseCategories: defaultExpenseCategories,
-    defaultPaymentCommissionRate: 2.49, defaultPaymentCommissionFixed: 0.25, defaultShopifyCommissionRate: 2.0, defaultShopifyCommissionFixed: 0, defaultCashOnDeliveryFee: 100,
+    defaultPaymentCommissionRate: 3.29, defaultPaymentCommissionFixed: 0.25, defaultShopifyCommissionRate: 2.0, defaultShopifyCommissionFixed: 0, defaultCashOnDeliveryFee: 100,
+    defaultOnlineCcRate: 3.29, defaultCodCcRate: 2.80, defaultCodCashRate: 0, defaultBankTransferRate: 0,
+    defaultCarrierCodFee: 30, defaultCarrierCodFeeType: 'tiered',
     shopifyStoreUrl: import.meta.env.VITE_SHOPIFY_STORE_URL || 'n1gfst-wc.myshopify.com',
     shopifyAccessToken: import.meta.env.VITE_SHOPIFY_ACCESS_TOKEN || '',
     shopifyWebhookSecret: import.meta.env.VITE_SHOPIFY_WEBHOOK_SECRET || ''
@@ -166,68 +168,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const fetchData = async () => {
       try {
-        const results = await Promise.allSettled([
+        // Faz 1: Anında arayüz yüklemesi için temel veriler (Ayarlar, Kategoriler, Ürünler & Varyantlar)
+        const phase1Results = await Promise.allSettled([
           supabase.from('settings').select('*').limit(1).maybeSingle(),
           fetchAllFromSupabase('expense_categories'),
           fetchAllFromSupabase('products'),
           fetchAllFromSupabase('product_variants'),
-          fetchAllFromSupabase('expenses'),
-          fetchAllFromSupabase('competitor_ads', '*', 'created_at', false),
-          fetchAllFromSupabase('competitor_profiles', '*', 'created_at', false),
-          fetchAllFromSupabase('orders', '*, order_items(*)', 'created_at', false),
-          fetchAllFromSupabase('cash_ledger', '*', 'date', false),
-          fetchAllFromSupabase('bank_accounts', '*', 'created_at', true),
-          fetchAllFromSupabase('credit_cards', '*', 'created_at', true),
-          fetchAllFromSupabase('supplier_invoices', '*', 'created_at', false),
-          fetchAllFromSupabase('expected_payouts', '*', 'created_at', false),
-          fetchAllFromSupabase('upcoming_payables', '*', 'created_at', false),
-          fetchAllFromSupabase('official_invoices', 'id, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at', 'date', false)
         ]);
 
-        const getResData = (idx: number) => {
-          const res = results[idx];
-          if (res.status === 'fulfilled') {
-            if (res.value.error) {
-              console.error(`DB Fetch Error [Table idx ${idx}]:`, res.value.error);
-            }
-            return res.value.data;
-          }
-          return null;
+        const getP1 = (idx: number) => {
+          const res = phase1Results[idx];
+          return (res.status === 'fulfilled' && !res.value.error) ? res.value.data : null;
         };
 
-        const setD = getResData(0);
-        const ecD = getResData(1);
-        const pD = getResData(2);
-        const vD = getResData(3);
-        const eD = getResData(4);
-        const caD = getResData(5);
-        const cpD = getResData(6);
-        const oD = getResData(7);
-        const ctD = getResData(8);
-        const baD = getResData(9);
-        const ccD = getResData(10);
-        const siD = getResData(11);
-        const epD = getResData(12);
-        const upD = getResData(13);
-        const oiD = getResData(14);
+        const setD = getP1(0);
+        const ecD = getP1(1);
+        const pD = getP1(2);
+        const vD = getP1(3);
 
         const loadedExpCategories = ecD ? ecD.map((c: any) => ({ id: c.id, name: c.name, color: c.color })) : [];
-
         const existingCatIds = new Set((loadedExpCategories.length > 0 ? loadedExpCategories : defaultExpenseCategories).map(c => c.id));
         const recoveredCategories = [...(loadedExpCategories.length > 0 ? loadedExpCategories : defaultExpenseCategories)];
-
-        if (eD && eD.length > 0) {
-          eD.forEach((e: any) => {
-            if (e.category_id && !existingCatIds.has(e.category_id)) {
-              existingCatIds.add(e.category_id);
-              recoveredCategories.push({
-                id: e.category_id,
-                name: e.category_id.startsWith('ec_') ? 'Gider Kategorisi ' + e.category_id.replace('ec_', '') : e.category_id,
-                color: '#3b82f6'
-              });
-            }
-          });
-        }
 
         if (setD) {
           setSettings(prev => {
@@ -275,6 +236,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
           lowStockThreshold: v.low_stock_threshold, costPriceOverride: v.cost_price_override,
           salePriceOverride: v.sale_price_override
         })));
+
+        // Faz 2: Arka planda ağrılıklı hareket verilerinin çekilmesi (Arayüzü kilitlenmeden akıcı tutar)
+        const results = await Promise.allSettled([
+          fetchAllFromSupabase('expenses'),
+          fetchAllFromSupabase('competitor_ads', '*', 'created_at', false),
+          fetchAllFromSupabase('competitor_profiles', '*', 'created_at', false),
+          fetchAllFromSupabase('orders', '*, order_items(*)', 'created_at', false),
+          fetchAllFromSupabase('cash_ledger', '*', 'date', false),
+          fetchAllFromSupabase('bank_accounts', '*', 'created_at', true),
+          fetchAllFromSupabase('credit_cards', '*', 'created_at', true),
+          fetchAllFromSupabase('supplier_invoices', '*', 'created_at', false),
+          fetchAllFromSupabase('expected_payouts', '*', 'created_at', false),
+          fetchAllFromSupabase('upcoming_payables', '*', 'created_at', false),
+          fetchAllFromSupabase('official_invoices', 'id, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at', 'date', false)
+        ]);
+
+        const getResData = (idx: number) => {
+          const res = results[idx];
+          if (res.status === 'fulfilled') {
+            if (res.value.error) {
+              console.error(`DB Fetch Error [Table idx ${idx}]:`, res.value.error);
+            }
+            return res.value.data;
+          }
+          return null;
+        };
+
+        const eD = getResData(0);
+        const caD = getResData(1);
+        const cpD = getResData(2);
+        const oD = getResData(3);
+        const ctD = getResData(4);
+        const baD = getResData(5);
+        const ccD = getResData(6);
+        const siD = getResData(7);
+        const epD = getResData(8);
+        const upD = getResData(9);
+        const oiD = getResData(10);
 
         if (eD !== null) {
           setExpenses(eD.map((e: any) => {
