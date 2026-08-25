@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { calculateOrder } from "@/utils/calculations";
-import { formatCurrency } from "@/utils/formatters";
+import { formatCurrency, toLocalDateString } from "@/utils/formatters";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -436,7 +436,7 @@ export default function Reports() {
     });
 
     filteredOrders.forEach(o => {
-      const key = o.orderDate.split('T')[0];
+      const key = toLocalDateString(o.orderDate);
       if (!revenueOverTime[key]) revenueOverTime[key] = { date: key, gelir: 0, kar: 0, siparis: 0 };
       const calc = calculateOrder(o);
       revenueOverTime[key].gelir += calc.taxableAmount;

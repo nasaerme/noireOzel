@@ -5,7 +5,7 @@ import { TrendingUp, TrendingDown, ShoppingCart, ArrowUpRight, AlertTriangle, Pa
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { orderStatusLabels, orderStatusColors, formatDate } from "@/utils/formatters";
+import { orderStatusLabels, orderStatusColors, formatDate, getLocalDateString, toLocalDateString } from "@/utils/formatters";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useMemo } from "react";
 
@@ -15,8 +15,8 @@ export default function Dashboard() {
 
   const metrics = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const todayStr = getLocalDateString(now);
+    const weekAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     let todayRev = 0, todayCollectedRev = 0, todayPendingRev = 0, todayOrderProfit = 0, todayOrders = 0;
@@ -27,10 +27,11 @@ export default function Dashboard() {
 
     validOrders.forEach(o => {
       const calc = calculateOrder(o);
+      const orderDateStr = toLocalDateString(o.orderDate);
       const d = new Date(o.orderDate);
       const isPaid = o.paymentStatus === 'odendi';
 
-      if (o.orderDate && o.orderDate.startsWith(todayStr)) {
+      if (orderDateStr === todayStr) {
         todayRev += calc.taxableAmount;
         if (isPaid) todayCollectedRev += calc.taxableAmount;
         else todayPendingRev += calc.taxableAmount;
@@ -50,7 +51,7 @@ export default function Dashboard() {
       }
     });
 
-    const todayExpenses = expenses.filter(e => e.date && e.date.startsWith(todayStr)).reduce((s, e) => s + e.amount, 0);
+    const todayExpenses = expenses.filter(e => toLocalDateString(e.date) === todayStr).reduce((s, e) => s + e.amount, 0);
     const monthExpenses = expenses.filter(e => new Date(e.date) >= monthStart).reduce((s, e) => s + e.amount, 0);
     const weekExpenses = expenses.filter(e => new Date(e.date) >= weekAgo).reduce((s, e) => s + e.amount, 0);
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);

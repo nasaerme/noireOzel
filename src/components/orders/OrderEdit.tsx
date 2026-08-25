@@ -64,13 +64,7 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
   const isCod = paymentMethod === 'kapida_odeme' || paymentMethod === 'kapida_odeme_kk' || paymentMethod === 'kapida_odeme_nakit';
 
   const handleSave = () => {
-    const originalDate = new Date(order.orderDate);
-    const [year, month, day] = orderDate.split('-').map(Number);
-    const finalDate = new Date(originalDate);
-    if (!isNaN(finalDate.getTime())) {
-      finalDate.setFullYear(year, month - 1, day);
-    }
-    const orderDateISO = finalDate.toISOString();
+    const orderDateISO = orderDate ? new Date(orderDate.includes('T') ? orderDate : `${orderDate}T12:00:00`).toISOString() : order.orderDate;
 
     updateOrder({
       ...order,

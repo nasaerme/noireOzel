@@ -183,7 +183,7 @@ export default function OrderCreate({ onClose }: { onClose: () => void }) {
       paymentCommissionRate, paymentCommissionFixed,
       shopifyCommissionRate, shopifyCommissionFixed,
       discountAmount, discountRate,
-      extraExpense, notes, orderDate: orderDate ? new Date(orderDate).toISOString() : new Date().toISOString(),
+      extraExpense, notes, orderDate: orderDate ? new Date(orderDate.includes('T') ? orderDate : `${orderDate}T12:00:00`).toISOString() : new Date().toISOString(),
       paymentMethod,
       codFee: isCod ? codFee : 0,
       carrierCodFee: isCod ? carrierCodFee : 0,

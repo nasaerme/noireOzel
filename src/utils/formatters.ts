@@ -14,6 +14,27 @@ export function formatPercent(value: number): string {
   return `%${value.toFixed(1)}`;
 }
 
+export function getLocalDateString(date = new Date()): string {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function toLocalDateString(dateStrOrObj: string | Date | undefined | null): string {
+  if (!dateStrOrObj) return '';
+  if (typeof dateStrOrObj === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStrOrObj)) {
+    return dateStrOrObj;
+  }
+  const d = new Date(dateStrOrObj);
+  if (isNaN(d.getTime())) return String(dateStrOrObj).slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function generateId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
 }
