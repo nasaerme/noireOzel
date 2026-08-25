@@ -174,6 +174,13 @@ export default function Reports() {
       havale: { methodLabel: '🏦 EFT / Havale', count: 0, loss: 0 },
     };
 
+    const getNormalizedPaymentCategory = (pm?: string): 'kredi_karti' | 'kapida_odeme' | 'havale' => {
+      if (!pm) return 'kredi_karti';
+      if (pm.startsWith('kapida_odeme')) return 'kapida_odeme';
+      if (pm.startsWith('havale')) return 'havale';
+      return 'kredi_karti';
+    };
+
     filteredOrders.forEach(o => {
       const calc = calculateOrder(o);
       const isReturned = o.orderStatus === 'iade' || o.paymentStatus === 'iade';
@@ -183,7 +190,7 @@ export default function Reports() {
         returnedOrdersCount++;
         totalReturnShippingLoss += calc.cancellationPenalty;
         
-        const method = o.paymentMethod || 'kredi_karti';
+        const method = getNormalizedPaymentCategory(o.paymentMethod);
         if (returnLossByMethod[method]) {
           returnLossByMethod[method].count++;
           returnLossByMethod[method].loss += calc.cancellationPenalty;
@@ -197,7 +204,7 @@ export default function Reports() {
         cancelledOrdersCount++;
         totalReturnShippingLoss += calc.cancellationPenalty;
 
-        const method = o.paymentMethod || 'kredi_karti';
+        const method = getNormalizedPaymentCategory(o.paymentMethod);
         if (returnLossByMethod[method]) {
           returnLossByMethod[method].count++;
           returnLossByMethod[method].loss += calc.cancellationPenalty;
@@ -497,8 +504,9 @@ export default function Reports() {
       const calc = calculateOrder(o);
       const isPaid = o.paymentStatus === 'odendi';
       const isCancelled = calc.isCancelled;
+      const cat = getNormalizedPaymentCategory(o.paymentMethod);
 
-      if (o.paymentMethod === 'kapida_odeme') {
+      if (cat === 'kapida_odeme') {
         codOrdersCount++;
         if (isCancelled) {
           codCancelledCount++;
@@ -513,7 +521,7 @@ export default function Reports() {
             codPendingRevenue += calc.taxableAmount;
           }
         }
-      } else if (o.paymentMethod === 'havale') {
+      } else if (cat === 'havale') {
         transferOrdersCount++;
         if (!isCancelled) {
           transferTotalRevenue += calc.taxableAmount;
@@ -528,7 +536,13 @@ export default function Reports() {
       } else { // kredi_karti
         creditCardOrdersCount++;
         if (!isCancelled) {
-          creditCardTotalRevenue += calc.taxableAmount;
+          if (isPaid) {
+            creditCardTotalRevenue += calc.taxableAmount;
+          } else {
+            // Ödenmemiş KK siparişleri de bekleyen ciroya yazılır
+            transferPendingCount++;
+            transferPendingRevenue += calc.taxableAmount;
+          }
         }
       }
     });
