@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { CompanyProfile } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, X, Save, Building2, Wallet, Tags } from "lucide-react";
+import { Plus, X, Save, Building2, Wallet, Tags, Check } from "lucide-react";
 import { toast } from "sonner";
 import { generateId } from "@/utils/formatters";
 
@@ -17,6 +18,59 @@ export default function SettingsPage() {
   const [newCategory, setNewCategory] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newCompetitor, setNewCompetitor] = useState("");
+  const [newCompany, setNewCompany] = useState<{ name: string; type: 'sahis' | 'limited' | 'anonim' | 'diger'; taxOffice: string; taxId: string }>({
+    name: "",
+    type: "limited",
+    taxOffice: "",
+    taxId: ""
+  });
+
+  const addCompany = () => {
+    if (!newCompany.name.trim()) {
+      toast.error("Lütfen firma unvanını giriniz.");
+      return;
+    }
+    const currentCompanies = form.companies || [];
+    const created: CompanyProfile = {
+      id: "comp_" + generateId(),
+      name: newCompany.name.trim(),
+      type: newCompany.type,
+      taxOffice: newCompany.taxOffice.trim(),
+      taxId: newCompany.taxId.trim(),
+      isDefault: currentCompanies.length === 0
+    };
+    setForm({
+      ...form,
+      companies: [...currentCompanies, created]
+    });
+    setNewCompany({ name: "", type: "limited", taxOffice: "", taxId: "" });
+    toast.success("Yeni firma profili eklendi.");
+  };
+
+  const removeCompany = (id: string) => {
+    const currentCompanies = form.companies || [];
+    if (currentCompanies.length <= 1) {
+      toast.error("Sistemde en az 1 adet firma profili bulunmalıdır.");
+      return;
+    }
+    setForm({
+      ...form,
+      companies: currentCompanies.filter(c => c.id !== id)
+    });
+  };
+
+  const setDefaultCompany = (id: string) => {
+    const currentCompanies = form.companies || [];
+    setForm({
+      ...form,
+      activeCompanyId: id,
+      companies: currentCompanies.map(c => ({
+        ...c,
+        isDefault: c.id === id
+      }))
+    });
+    toast.success("Varsayılan firma güncellendi.");
+  };
 
   useEffect(() => {
     setForm({ ...settings });
@@ -141,6 +195,112 @@ export default function SettingsPage() {
               <div className="space-y-3">
                 <Label>E-posta Adresi</Label>
                 <Input type="email" value={form.businessEmail} onChange={e => setForm({ ...form, businessEmail: e.target.value })} placeholder="iletisim@sirket.com" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Firma Profilleri (Şahıs & Limited Şirket Yönetimi) */}
+          <Card className="border-border/60 shadow-sm border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                Firma Profilleri (Şahıs & Limited Şirketi Yönetimi)
+              </CardTitle>
+              <CardDescription>
+                E-Fatura & Ön Muhasebe raporlarında faturalarınızın karışmaması için Şahıs Firması ve Limited Şirket profillerinizi buradan tanımlayın.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Existing Company List */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(form.companies || []).map(comp => (
+                  <div key={comp.id} className={`p-4 rounded-xl border transition-all relative ${comp.isDefault || form.activeCompanyId === comp.id ? 'border-primary bg-background shadow-sm' : 'border-border/60 bg-background/50'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-sm">{comp.name}</h4>
+                          <Badge variant="secondary" className={comp.type === 'sahis' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]' : 'bg-blue-500/10 text-blue-600 border-blue-500/20 text-[10px]'}>
+                            {comp.type === 'sahis' ? '🏢 Şahıs Şirketi' : comp.type === 'limited' ? '🏛️ Limited Şirket' : '🏢 ' + comp.type}
+                          </Badge>
+                        </div>
+                        {comp.taxId && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            VKN/TCKN: <span className="font-mono">{comp.taxId}</span> {comp.taxOffice ? `(${comp.taxOffice} V.D.)` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {comp.isDefault || form.activeCompanyId === comp.id ? (
+                          <Badge className="bg-emerald-600 text-white gap-1 text-[10px]">
+                            <Check className="h-3 w-3" /> Varsayılan
+                          </Badge>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => setDefaultCompany(comp.id)} className="h-7 text-xs text-muted-foreground hover:text-primary">
+                            Varsayılan Yap
+                          </Button>
+                        )}
+                        {(form.companies || []).length > 1 && (
+                          <Button variant="ghost" size="icon" onClick={() => removeCompany(comp.id)} className="h-7 w-7 text-destructive hover:bg-destructive/10">
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add New Company Form */}
+              <div className="p-4 border rounded-xl bg-background/80 space-y-4">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Plus className="h-3.5 w-3.5 text-primary" /> Yeni Firma Profili Ekle
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs">Firma Unvanı / Adı *</Label>
+                    <Input 
+                      placeholder="Örn: Noire Tekstil ve Mağazacılık Ltd. Şti." 
+                      value={newCompany.name}
+                      onChange={e => setNewCompany({ ...newCompany, name: e.target.value })}
+                      className="bg-background"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Şirket Türü</Label>
+                    <Select value={newCompany.type} onValueChange={(val: any) => setNewCompany({ ...newCompany, type: val })}>
+                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sahis">🏢 Şahıs Şirketi (Şahıs Firması)</SelectItem>
+                        <SelectItem value="limited">🏛️ Limited Şirket (Ltd. Şti.)</SelectItem>
+                        <SelectItem value="anonim">🏬 Anonim Şirket (A.Ş.)</SelectItem>
+                        <SelectItem value="diger">💼 Diğer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">VKN / TCKN</Label>
+                    <Input 
+                      placeholder="10 veya 11 haneli vergi no" 
+                      value={newCompany.taxId}
+                      onChange={e => setNewCompany({ ...newCompany, taxId: e.target.value })}
+                      className="bg-background"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Vergi Dairesi</Label>
+                    <Input 
+                      placeholder="Örn: Maslak V.D." 
+                      value={newCompany.taxOffice}
+                      onChange={e => setNewCompany({ ...newCompany, taxOffice: e.target.value })}
+                      className="bg-background"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button type="button" onClick={addCompany} className="w-full gap-2 bg-primary hover:bg-primary/90">
+                      <Plus className="h-4 w-4" /> Firma Profilini Ekle
+                    </Button>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

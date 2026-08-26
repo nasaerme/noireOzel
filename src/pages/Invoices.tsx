@@ -23,6 +23,8 @@ import { toast } from "sonner";
 
 interface BatchInvoiceItem {
   id: string;
+  companyId?: string;
+  companyName?: string;
   type: "kestigim" | "bana_kesilen";
   invoiceNumber: string;
   date: string;
@@ -42,7 +44,12 @@ interface BatchInvoiceItem {
 export default function Invoices() {
   const { officialInvoices, addOfficialInvoice, addOfficialInvoicesBatch, fetchInvoiceFile, updateOfficialInvoice, deleteOfficialInvoice, settings } = useApp();
   const sym = settings.currencySymbol;
+  const companies = useMemo(() => settings.companies || [], [settings.companies]);
+  const activeDefaultCompany = useMemo(() => {
+    return companies.find(c => c.id === settings.activeCompanyId) || companies.find(c => c.isDefault) || companies[0] || { id: 'comp_sahis', name: 'The Noire Co. (Şahıs Firması)' };
+  }, [companies, settings]);
 
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"kestigim" | "bana_kesilen" | "vergi_raporu">("kestigim");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedYear, setSelectedYear] = useState<string>("all");
@@ -76,12 +83,14 @@ export default function Invoices() {
 
   // Batch Multi-PDF Import State
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
+  const [batchCompanyId, setBatchCompanyId] = useState<string>("comp_sahis");
   const [batchItems, setBatchItems] = useState<BatchInvoiceItem[]>([]);
   const [batchProgress, setBatchProgress] = useState(0);
   const [batchTotalCount, setBatchTotalCount] = useState(0);
 
   // Form State for Single Add
   const [formData, setFormData] = useState<{
+    companyId: string;
     type: "kestigim" | "bana_kesilen";
     invoiceNumber: string;
     date: string;
@@ -98,6 +107,7 @@ export default function Invoices() {
     invoiceFileName: string;
     notes: string;
   }>({
+    companyId: activeDefaultCompany.id,
     type: "kestigim",
     invoiceNumber: "",
     date: new Date().toISOString().split("T")[0],
@@ -161,7 +171,11 @@ export default function Invoices() {
     }
 
     // Batch PDF Mode
+    const targetCompId = selectedCompanyId !== "all" ? selectedCompanyId : activeDefaultCompany.id;
+    const targetComp = companies.find(c => c.id === targetCompId) || activeDefaultCompany;
+
     setIsParsingPdf(true);
+    setBatchCompanyId(targetCompId);
     setBatchTotalCount(files.length);
     setBatchProgress(0);
     setBatchItems([]);
@@ -185,6 +199,8 @@ export default function Invoices() {
 
         parsedList.push({
           id: `batch_${Date.now()}_${i}`,
+          companyId: targetCompId,
+          companyName: targetComp.name,
           type: defaultType,
           invoiceNumber: parsed.invoiceNumber,
           date: parsed.date,
@@ -298,10 +314,23 @@ export default function Invoices() {
     setBatchItems(prev => prev.map(item => item.id === id ? { ...item, type } : item));
   };
 
+  const handleUpdateBatchCompany = (companyId: string) => {
+    setBatchCompanyId(companyId);
+    const targetComp = companies.find(c => c.id === companyId) || activeDefaultCompany;
+    setBatchItems(prev => prev.map(item => ({ ...item, companyId, companyName: targetComp.name })));
+  };
+
+  const handleUpdateBatchItemCompany = (id: string, companyId: string) => {
+    const targetComp = companies.find(c => c.id === companyId) || activeDefaultCompany;
+    setBatchItems(prev => prev.map(item => item.id === id ? { ...item, companyId, companyName: targetComp.name } : item));
+  };
+
   const handleOpenAdd = (type: "kestigim" | "bana_kesilen" = "kestigim") => {
     setEditingInvoice(null);
     setIsAutoParsed(false);
+    const defaultCompId = selectedCompanyId !== "all" ? selectedCompanyId : activeDefaultCompany.id;
     setFormData({
+      companyId: defaultCompId,
       type,
       invoiceNumber: "",
       date: new Date().toISOString().split("T")[0],
@@ -325,6 +354,7 @@ export default function Invoices() {
     setEditingInvoice(inv);
     setIsAutoParsed(false);
     setFormData({
+      companyId: inv.companyId || activeDefaultCompany.id,
       type: inv.type,
       invoiceNumber: inv.invoiceNumber,
       date: inv.date,
@@ -355,10 +385,13 @@ export default function Invoices() {
     const taxRate = parseFloat(formData.taxRate) || 0;
     const taxAmount = parseFloat(formData.taxAmount) || (subtotal * taxRate / 100);
     const totalAmount = parseFloat(formData.totalAmount) || (subtotal + taxAmount);
+    const targetComp = companies.find(c => c.id === formData.companyId) || activeDefaultCompany;
 
     if (editingInvoice) {
       updateOfficialInvoice({
         ...editingInvoice,
+        companyId: formData.companyId,
+        companyName: targetComp.name,
         type: formData.type,
         invoiceNumber: formData.invoiceNumber.trim(),
         date: formData.date,
@@ -376,6 +409,8 @@ export default function Invoices() {
       });
     } else {
       addOfficialInvoice({
+        companyId: formData.companyId,
+        companyName: targetComp.name,
         type: formData.type,
         invoiceNumber: formData.invoiceNumber.trim(),
         date: formData.date,
@@ -407,6 +442,11 @@ export default function Invoices() {
 
   const filteredInvoices = useMemo(() => {
     return officialInvoices.filter(inv => {
+      if (selectedCompanyId !== "all") {
+        const invCompId = inv.companyId || activeDefaultCompany.id;
+        if (invCompId !== selectedCompanyId) return false;
+      }
+
       if (isCustomRange) {
         if (startDate && inv.date < startDate) return false;
         if (endDate && inv.date > endDate) return false;
@@ -424,16 +464,17 @@ export default function Invoices() {
 
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase();
-        const numMatch = inv.invoiceNumber.toLowerCase().includes(term);
-        const partyMatch = inv.partyName.toLowerCase().includes(term);
-        const descMatch = inv.description.toLowerCase().includes(term);
+        const numMatch = (inv.invoiceNumber || "").toLowerCase().includes(term);
+        const partyMatch = (inv.partyName || "").toLowerCase().includes(term);
+        const descMatch = (inv.description || "").toLowerCase().includes(term);
         const taxIdMatch = (inv.partyTaxId || "").toLowerCase().includes(term);
-        if (!numMatch && !partyMatch && !descMatch && !taxIdMatch) return false;
+        const compMatch = (inv.companyName || "").toLowerCase().includes(term);
+        if (!numMatch && !partyMatch && !descMatch && !taxIdMatch && !compMatch) return false;
       }
 
       return true;
     });
-  }, [officialInvoices, isCustomRange, startDate, endDate, selectedYear, selectedMonth, searchTerm]);
+  }, [officialInvoices, selectedCompanyId, activeDefaultCompany.id, isCustomRange, startDate, endDate, selectedYear, selectedMonth, searchTerm]);
 
   const issuedInvoices = useMemo(() => filteredInvoices.filter(i => i.type === "kestigim"), [filteredInvoices]);
   const receivedInvoices = useMemo(() => filteredInvoices.filter(i => i.type === "bana_kesilen"), [filteredInvoices]);
@@ -468,7 +509,7 @@ export default function Invoices() {
   // Quarterly (3-Month / Geçici Vergi) Breakdown
   const quarterlyData = useMemo(() => {
     const yearToUse = selectedYear !== "all" ? selectedYear : new Date().getFullYear().toString();
-    const yearInvoices = officialInvoices.filter(i => i.date && i.date.startsWith(yearToUse));
+    const yearInvoices = filteredInvoices.filter(i => i.date && i.date.startsWith(yearToUse));
 
     const quarters = [
       { id: 1, name: "1. Çeyrek (Ocak - Mart)", months: ["01", "02", "03"] },
@@ -511,7 +552,7 @@ export default function Invoices() {
         netKdv
       };
     });
-  }, [officialInvoices, selectedYear]);
+  }, [filteredInvoices, selectedYear]);
 
   // Monthly Breakdown Table
   const monthlyData = useMemo(() => {
@@ -527,7 +568,7 @@ export default function Invoices() {
       let issuedMatrah = 0, issuedKdv = 0;
       let receivedMatrah = 0, receivedKdv = 0;
 
-      officialInvoices.forEach(inv => {
+      filteredInvoices.forEach(inv => {
         if (inv.date && inv.date.startsWith(`${yearToUse}-${m.num}`)) {
           if (inv.type === "kestigim") {
             issuedMatrah += inv.subtotal;
@@ -552,7 +593,7 @@ export default function Invoices() {
         netKdv
       };
     });
-  }, [officialInvoices, selectedYear]);
+  }, [filteredInvoices, selectedYear]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -718,6 +759,22 @@ export default function Invoices() {
       <Card>
         <CardContent className="p-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-1 items-center gap-3 w-full md:w-auto">
+            {/* Firma Seçimi Filtresi */}
+            <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+              <SelectTrigger className="w-[210px] border-primary/40 bg-primary/5 font-medium shrink-0">
+                <Building2 className="h-4 w-4 mr-2 text-primary" />
+                <SelectValue placeholder="Firma Seçiniz" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">🏢 Tüm Firmalarım</SelectItem>
+                {companies.map(c => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.type === 'sahis' ? '🏢 ' : c.type === 'limited' ? '🏛️ ' : '💼 '}{c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -839,11 +896,12 @@ export default function Invoices() {
           </div>
 
           <div className="text-xs text-muted-foreground flex items-center gap-3">
-            {(selectedYear !== "all" || selectedMonth !== "all" || searchTerm || isCustomRange || startDate || endDate) && (
+            {(selectedCompanyId !== "all" || selectedYear !== "all" || selectedMonth !== "all" || searchTerm || isCustomRange || startDate || endDate) && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
+                  setSelectedCompanyId("all");
                   setSelectedYear("all");
                   setSelectedMonth("all");
                   setIsCustomRange(false);
@@ -1054,10 +1112,25 @@ export default function Invoices() {
 
           {!isParsingPdf && (
             <div className="flex-1 overflow-y-auto my-2 space-y-4">
-              <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-lg text-emerald-700 dark:text-emerald-300 text-sm">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-lg text-emerald-700 dark:text-emerald-300 text-sm">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-5 w-5 text-emerald-600" />
-                  <span>Toplam <strong>{batchItems.length}</strong> adet PDF fatura başarıyla taranarak ayrıştırıldı.</span>
+                  <span>Toplam <strong>{batchItems.length}</strong> adet PDF fatura taranarak ayrıştırıldı.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold">Hedef Firma:</span>
+                  <Select value={batchCompanyId} onValueChange={handleUpdateBatchCompany}>
+                    <SelectTrigger className="h-8 text-xs bg-background w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companies.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.type === 'sahis' ? '🏢 ' : c.type === 'limited' ? '🏛️ ' : '💼 '}{c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -1066,6 +1139,7 @@ export default function Invoices() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>#</TableHead>
+                      <TableHead>Firma</TableHead>
                       <TableHead>Fatura Yönü</TableHead>
                       <TableHead>Fatura No</TableHead>
                       <TableHead>Tarih</TableHead>
@@ -1082,10 +1156,25 @@ export default function Invoices() {
                         <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
                         <TableCell>
                           <Select 
+                            value={item.companyId || batchCompanyId} 
+                            onValueChange={(val) => handleUpdateBatchItemCompany(item.id, val)}
+                          >
+                            <SelectTrigger className="h-8 text-xs w-[140px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {companies.map(c => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select 
                             value={item.type} 
                             onValueChange={(val: "kestigim" | "bana_kesilen") => handleUpdateBatchType(item.id, val)}
                           >
-                            <SelectTrigger className="h-8 text-xs w-[130px]">
+                            <SelectTrigger className="h-8 text-xs w-[120px]">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1173,6 +1262,25 @@ export default function Invoices() {
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <Label>Hangi Firmamıza Ait? *</Label>
+                <Select 
+                  value={formData.companyId} 
+                  onValueChange={(val) => setFormData(prev => ({ ...prev, companyId: val }))}
+                >
+                  <SelectTrigger className="border-primary/40 bg-primary/5">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.type === 'sahis' ? '🏢 ' : c.type === 'limited' ? '🏛️ ' : '💼 '}{c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Fatura Yönü</Label>
                 <Select 
                   value={formData.type} 
@@ -1187,7 +1295,9 @@ export default function Invoices() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Fatura Numarası *</Label>
                 <Input 
@@ -1197,9 +1307,7 @@ export default function Invoices() {
                   required
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{formData.type === "kestigim" ? "Kime Kesildi (Müşteri/Firma Adı) *" : "Kim Kesti (Tedarikçi/Satıcı Adı) *"}</Label>
                 <Input 
@@ -1207,15 +1315,6 @@ export default function Invoices() {
                   value={formData.partyName}
                   onChange={(e) => setFormData(prev => ({ ...prev, partyName: e.target.value }))}
                   required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>VKN / TCKN (Vergi / Kimlik No)</Label>
-                <Input 
-                  placeholder="10 veya 11 haneli vergi no" 
-                  value={formData.partyTaxId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, partyTaxId: e.target.value }))}
                 />
               </div>
             </div>
@@ -1442,9 +1541,15 @@ function InvoiceTable({
               </TableCell>
               <TableCell>
                 <div className="font-medium text-sm">{inv.partyName}</div>
-                {inv.partyTaxId && (
-                  <div className="text-[10px] text-muted-foreground">VKN/TCKN: {inv.partyTaxId}</div>
-                )}
+                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                  <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">
+                    <Building2 className="h-2.5 w-2.5 mr-1 inline" />
+                    {inv.companyName || "Şahıs Firması"}
+                  </Badge>
+                  {inv.partyTaxId && (
+                    <span className="text-[10px] text-muted-foreground font-mono">VKN: {inv.partyTaxId}</span>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="max-w-[200px] truncate text-xs" title={inv.description}>
                 {inv.description}

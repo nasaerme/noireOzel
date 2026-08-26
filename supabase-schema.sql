@@ -236,6 +236,8 @@ CREATE TABLE IF NOT EXISTS upcoming_payables (
 -- 10. OFFICIAL INVOICES (E-FATURA & ÖN MUHASEBE)
 CREATE TABLE IF NOT EXISTS official_invoices (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_id TEXT,
+  company_name TEXT,
   type TEXT NOT NULL,
   invoice_number TEXT NOT NULL,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -252,6 +254,9 @@ CREATE TABLE IF NOT EXISTS official_invoices (
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE official_invoices ADD COLUMN IF NOT EXISTS company_id TEXT;
+ALTER TABLE official_invoices ADD COLUMN IF NOT EXISTS company_name TEXT;
 
 -- Disable Row Level Security (RLS) policies completely for direct client access
 ALTER TABLE products DISABLE ROW LEVEL SECURITY;

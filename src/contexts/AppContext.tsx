@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
-import { Product, ProductVariant, Order, Expense, ExpenseCategory, Settings, CompetitorAd, CompetitorProfile, CashTransaction, BankAccount, CreditCard, SupplierInvoice, ExpectedPayout, UpcomingPayable, OfficialInvoice } from '@/types';
+import { Product, ProductVariant, Order, Expense, ExpenseCategory, Settings, CompetitorAd, CompetitorProfile, CashTransaction, BankAccount, CreditCard, SupplierInvoice, ExpectedPayout, UpcomingPayable, OfficialInvoice, CompanyProfile } from '@/types';
 import { generateId, generateOrderNumber } from '@/utils/formatters';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -94,6 +94,11 @@ const defaultExpenseCategories: ExpenseCategory[] = [
   { id: 'ec_8', name: 'Genel Giderler', color: '#6b7280' }
 ];
 
+const defaultCompanies: CompanyProfile[] = [
+  { id: 'comp_sahis', name: 'The Noire Co. (Şahıs Firması)', type: 'sahis', isDefault: true },
+  { id: 'comp_limited', name: 'Noire Tekstil Ltd. Şti. (Limited Şirket)', type: 'limited', isDefault: false }
+];
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -111,6 +116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const defaultSettings: Settings = {
     language: 'tr', currency: 'TRY', currencySymbol: '₺', defaultTaxRate: 20, businessName: 'The Noire Co.', businessAddress: '', businessPhone: '', businessEmail: '', categories: [], competitors: [], expenseCategories: defaultExpenseCategories,
+    companies: defaultCompanies, activeCompanyId: 'comp_sahis',
     defaultPaymentCommissionRate: 3.29, defaultPaymentCommissionFixed: 0.25, defaultShopifyCommissionRate: 2.0, defaultShopifyCommissionFixed: 0, defaultCashOnDeliveryFee: 100,
     defaultOnlineCcRate: 3.29, defaultCodCcRate: 2.80, defaultCodCashRate: 0, defaultBankTransferRate: 0,
     defaultCarrierCodFee: 30, defaultCarrierCodFeeType: 'tiered',
@@ -246,10 +252,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           fetchAllFromSupabase('cash_ledger', '*', 'date', false),
           fetchAllFromSupabase('bank_accounts', '*', 'created_at', true),
           fetchAllFromSupabase('credit_cards', '*', 'created_at', true),
-          fetchAllFromSupabase('supplier_invoices', '*', 'created_at', false),
+          fetchAllFromSupabase('supplier_invoices', 'id, date, supplier_name, invoice_type, items_summary, items, subtotal, total_tax, amount, payment_method, source_account_id, invoice_file_name, invoice_status, notes, created_at', 'created_at', false),
           fetchAllFromSupabase('expected_payouts', '*', 'created_at', false),
           fetchAllFromSupabase('upcoming_payables', '*', 'created_at', false),
-          fetchAllFromSupabase('official_invoices', 'id, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at', 'date', false)
+          fetchAllFromSupabase('official_invoices', 'id, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at', 'created_at', false)
         ]);
 
         const getResData = (idx: number) => {
@@ -383,24 +389,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         if (oiD !== null) {
-          setOfficialInvoices(oiD.map((oi: any) => ({
-            id: oi.id,
-            type: oi.type as 'kestigim' | 'bana_kesilen',
-            invoiceNumber: oi.invoice_number,
-            date: oi.date,
-            partyName: oi.party_name,
-            partyTaxId: oi.party_tax_id || '',
-            description: oi.description,
-            category: oi.category || '',
-            subtotal: Number(oi.subtotal),
-            taxRate: Number(oi.tax_rate),
-            taxAmount: Number(oi.tax_amount),
-            totalAmount: Number(oi.total_amount),
-            invoiceFile: oi.invoice_file || '',
-            invoiceFileName: oi.invoice_file_name || '',
-            notes: oi.notes || '',
-            createdAt: oi.created_at
-          })));
+          console.log("📊 Loaded Official Invoices count from Supabase:", oiD.length);
+          const defaultComp = (settings.companies && settings.companies.length > 0) ? settings.companies[0] : { id: 'comp_sahis', name: 'The Noire Co. (Şahıs Firması)' };
+          
+          setOfficialInvoices(oiD.map((oi: any) => {
+            const rawType = (oi.type || '').toLowerCase();
+            const isReceived = rawType.includes('bana') || rawType.includes('gider') || rawType.includes('received') || rawType.includes('alis') || rawType.includes('gelen');
+            
+            return {
+              id: oi.id,
+              companyId: oi.company_id || settings.activeCompanyId || defaultComp.id,
+              companyName: oi.company_name || defaultComp.name,
+              type: isReceived ? 'bana_kesilen' : 'kestigim',
+              invoiceNumber: oi.invoice_number || 'FATURA',
+              date: oi.date || (oi.created_at ? oi.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+              partyName: oi.party_name || 'Bilinmeyen Firma',
+              partyTaxId: oi.party_tax_id || '',
+              description: oi.description || '',
+              category: oi.category || 'Genel',
+              subtotal: Number(oi.subtotal || 0),
+              taxRate: Number(oi.tax_rate || 0),
+              taxAmount: Number(oi.tax_amount || 0),
+              totalAmount: Number(oi.total_amount || 0),
+              invoiceFile: oi.invoice_file || '',
+              invoiceFileName: oi.invoice_file_name || '',
+              notes: oi.notes || '',
+              createdAt: oi.created_at || new Date().toISOString()
+            };
+          }));
         }
       } catch (err) {
         console.error("Veri çekme hatası:", err);
@@ -1307,8 +1323,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const createdAt = new Date().toISOString();
     const newI: OfficialInvoice = { ...i, id, createdAt };
 
-    supabase.from('official_invoices').insert({
+    const payload: any = {
       id,
+      company_id: i.companyId || null,
+      company_name: i.companyName || null,
       type: i.type,
       invoice_number: i.invoiceNumber,
       date: i.date,
@@ -1324,7 +1342,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       invoice_file_name: i.invoiceFileName || null,
       notes: i.notes || null,
       created_at: createdAt
-    }).then(({ error }) => {
+    };
+
+    const saveToSupabase = async () => {
+      let { error } = await supabase.from('official_invoices').insert(payload);
+      if (error && (error.message.includes('company_id') || error.message.includes('company_name'))) {
+        const fallbackPayload = { ...payload };
+        delete fallbackPayload.company_id;
+        delete fallbackPayload.company_name;
+        const res = await supabase.from('official_invoices').insert(fallbackPayload);
+        error = res.error;
+      }
+
       if (error) {
         console.error("Fatura ekleme DB hatası:", error);
         toast.error("Fatura DB Kayıt Hatası: " + error.message);
@@ -1332,11 +1361,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setOfficialInvoices(prev => [newI, ...prev]);
         toast.success("Fatura kaydedildi");
       }
-    });
+    };
+    saveToSupabase();
   }, []);
 
   const updateOfficialInvoice = useCallback((i: OfficialInvoice) => {
-    supabase.from('official_invoices').update({
+    const payload: any = {
+      company_id: i.companyId || null,
+      company_name: i.companyName || null,
       type: i.type,
       invoice_number: i.invoiceNumber,
       date: i.date,
@@ -1351,14 +1383,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       invoice_file: i.invoiceFile || null,
       invoice_file_name: i.invoiceFileName || null,
       notes: i.notes || null
-    }).eq('id', i.id).then(({ error }) => {
+    };
+
+    const updateInSupabase = async () => {
+      let { error } = await supabase.from('official_invoices').update(payload).eq('id', i.id);
+      if (error && (error.message.includes('company_id') || error.message.includes('company_name'))) {
+        const fallbackPayload = { ...payload };
+        delete fallbackPayload.company_id;
+        delete fallbackPayload.company_name;
+        const res = await supabase.from('official_invoices').update(fallbackPayload).eq('id', i.id);
+        error = res.error;
+      }
+
       if (error) {
         toast.error("Fatura Güncelleme DB Hatası: " + error.message);
       } else {
         setOfficialInvoices(prev => prev.map(x => x.id === i.id ? i : x));
         toast.success("Fatura güncellendi");
       }
-    });
+    };
+    updateInSupabase();
   }, []);
 
   const addOfficialInvoicesBatch = useCallback(async (invoicesList: Omit<OfficialInvoice, 'id' | 'createdAt'>[]) => {
@@ -1373,6 +1417,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const dbRows = createdInvoices.map(i => ({
       id: i.id,
+      company_id: i.companyId || null,
+      company_name: i.companyName || null,
       type: i.type,
       invoice_number: i.invoiceNumber,
       date: i.date,
@@ -1390,7 +1436,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       created_at: createdAt
     }));
 
-    const { error } = await supabase.from('official_invoices').insert(dbRows);
+    let { error } = await supabase.from('official_invoices').insert(dbRows);
+    if (error && (error.message.includes('company_id') || error.message.includes('company_name'))) {
+      const fallbackRows = dbRows.map((r: any) => {
+        const copy = { ...r };
+        delete copy.company_id;
+        delete copy.company_name;
+        return copy;
+      });
+      const res = await supabase.from('official_invoices').insert(fallbackRows);
+      error = res.error;
+    }
+
     if (error) {
       console.error("Toplu fatura ekleme DB hatası:", error);
       toast.error("Toplu Fatura Kayıt Hatası: " + error.message);

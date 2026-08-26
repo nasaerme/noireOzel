@@ -83,6 +83,15 @@ export interface ExpenseCategory {
   color: string;
 }
 
+export interface CompanyProfile {
+  id: string;
+  name: string;
+  taxOffice?: string;
+  taxId?: string;
+  type?: 'sahis' | 'limited' | 'anonim' | 'diger';
+  isDefault?: boolean;
+}
+
 export interface Settings {
   language: string;
   currency: string;
@@ -95,6 +104,8 @@ export interface Settings {
   categories: string[];
   competitors: string[];
   expenseCategories: ExpenseCategory[];
+  companies?: CompanyProfile[];
+  activeCompanyId?: string;
   defaultPaymentCommissionRate: number;
   defaultPaymentCommissionFixed: number;
   defaultShopifyCommissionRate: number;
@@ -253,6 +264,8 @@ export interface UpcomingPayable {
 
 export interface OfficialInvoice {
   id: string;
+  companyId?: string; // Hangi firmamıza ait olduğu (Şahıs Şirketi / Limited Şirket vb.)
+  companyName?: string; // Firma Unvanı önbelleği
   type: 'kestigim' | 'bana_kesilen'; // 'kestigim' (Satış/Giden) | 'bana_kesilen' (Alış/Gider/Gelen)
   invoiceNumber: string;
   date: string;
@@ -269,6 +282,7 @@ export interface OfficialInvoice {
   notes?: string;
   createdAt: string;
 }
+
 
 
 

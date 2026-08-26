@@ -16,31 +16,48 @@ import CashLedger from "./pages/CashLedger";
 import Invoices from "./pages/Invoices";
 import NotFound from "./pages/NotFound";
 
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import Login from "./pages/Login";
+
 const queryClient = new QueryClient();
+
+function MainContent() {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
+  return (
+    <AppLayout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/urunler" element={<Products />} />
+        <Route path="/siparisler" element={<Orders />} />
+        <Route path="/giderler" element={<Expenses />} />
+        <Route path="/mali-tablo" element={<CashLedger />} />
+        <Route path="/faturalar" element={<Invoices />} />
+        <Route path="/reklam-takip" element={<CompetitorAds />} />
+        <Route path="/raporlar" element={<Reports />} />
+        <Route path="/ayarlar" element={<SettingsPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AppLayout>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <AppProvider>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <AppLayout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/urunler" element={<Products />} />
-              <Route path="/siparisler" element={<Orders />} />
-              <Route path="/giderler" element={<Expenses />} />
-              <Route path="/mali-tablo" element={<CashLedger />} />
-              <Route path="/faturalar" element={<Invoices />} />
-              <Route path="/reklam-takip" element={<CompetitorAds />} />
-              <Route path="/raporlar" element={<Reports />} />
-              <Route path="/ayarlar" element={<SettingsPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AppLayout>
-        </BrowserRouter>
-      </AppProvider>
+      <AuthProvider>
+        <AppProvider>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <MainContent />
+          </BrowserRouter>
+        </AppProvider>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
