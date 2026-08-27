@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Order } from "@/types";
+import { getTieredCarrierFee, calculateOrder } from "@/utils/calculations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,8 +18,9 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
   const [orderNumber, setOrderNumber] = useState(order.orderNumber || "");
   const [paymentMethod, setPaymentMethod] = useState(order.paymentMethod || "online_kredi_karti");
   const isCodInitial = paymentMethod === 'kapida_odeme' || paymentMethod === 'kapida_odeme_kk' || paymentMethod === 'kapida_odeme_nakit';
+  const calcInitial = calculateOrder(order);
   const [codFee, setCodFee] = useState(order.codFee ?? (isCodInitial ? (settings.defaultCashOnDeliveryFee ?? 100) : 0));
-  const [carrierCodFee, setCarrierCodFee] = useState<number>(order.carrierCodFee ?? (isCodInitial ? 54.40 : 0));
+  const [carrierCodFee, setCarrierCodFee] = useState<number>(order.carrierCodFee ?? (isCodInitial ? calcInitial.carrierCodFeeCost : 0));
   const [paymentCommissionRate, setPaymentCommissionRate] = useState<number>(order.paymentCommissionRate ?? 3.29);
 
   const [taxRate, setTaxRate] = useState(order.taxRate);
@@ -38,23 +40,22 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
 
   const handlePaymentMethodChange = (v: string) => {
     setPaymentMethod(v);
+    const calcCurrent = calculateOrder({ ...order, paymentMethod: v });
+    const autoCarrierFee = getTieredCarrierFee(calcCurrent.taxableAmount);
+
     if (v === 'online_kredi_karti' || v === 'kredi_karti') {
-      setPaymentStatus('odendi');
       setCodFee(0);
       setPaymentCommissionRate(settings.defaultOnlineCcRate ?? 3.29);
       setCarrierCodFee(0);
     } else if (v === 'kapida_odeme_kk') {
-      setPaymentStatus('beklemede');
       setCodFee(settings.defaultCashOnDeliveryFee ?? 100);
       setPaymentCommissionRate(settings.defaultCodCcRate ?? 2.80);
-      setCarrierCodFee(54.40);
+      setCarrierCodFee(order.carrierCodFee && order.carrierCodFee > 0 ? order.carrierCodFee : autoCarrierFee);
     } else if (v === 'kapida_odeme_nakit' || v === 'kapida_odeme') {
-      setPaymentStatus('beklemede');
       setCodFee(settings.defaultCashOnDeliveryFee ?? 100);
       setPaymentCommissionRate(settings.defaultCodCashRate ?? 0);
-      setCarrierCodFee(54.40);
+      setCarrierCodFee(order.carrierCodFee && order.carrierCodFee > 0 ? order.carrierCodFee : autoCarrierFee);
     } else if (v === 'havale_eft' || v === 'havale') {
-      setPaymentStatus('beklemede');
       setCodFee(0);
       setPaymentCommissionRate(settings.defaultBankTransferRate ?? 0);
       setCarrierCodFee(0);

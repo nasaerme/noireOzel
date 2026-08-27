@@ -327,6 +327,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               discountRate: o.discount_rate, extraExpense: o.extra_expense, notes: o.notes || '',
               orderDate: o.order_date, paymentStatus, orderStatus: o.order_status,
               paymentMethod, codFee, cancellationReason,
+              carrierCodFee: o.carrier_cod_fee,
+              carrierCodFeeType: o.carrier_cod_fee_type,
               city: o.city || '', district: o.district || '',
               createdAt: o.created_at,
               items: (o.order_items || []).map((i: any) => ({
@@ -552,7 +554,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       shopify_commission_fixed: o.shopifyCommissionFixed, discount_amount: o.discountAmount,
       discount_rate: o.discountRate, extra_expense: o.extraExpense, notes: o.notes,
       order_date: o.orderDate, payment_status: o.paymentStatus || 'beklemede', order_status: o.orderStatus || 'yeni',
-      city: o.city, district: o.district, payment_method: paymentMethod, cod_fee: codFee, cancellation_reason: cancellationReason
+      city: o.city, district: o.district, payment_method: paymentMethod, cod_fee: codFee, cancellation_reason: cancellationReason,
+      carrier_cod_fee: o.carrierCodFee, carrier_cod_fee_type: o.carrierCodFeeType
     };
 
     const saveToSupabase = async () => {
@@ -603,7 +606,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       order_status: o.orderStatus || 'yeni', notes: o.notes, city: o.city, district: o.district,
       cancellation_reason: o.cancellationReason || '',
       payment_method: o.paymentMethod || 'kredi_karti',
-      cod_fee: o.codFee ?? 0
+      payment_commission_rate: o.paymentCommissionRate,
+      payment_commission_fixed: o.paymentCommissionFixed,
+      cod_fee: o.codFee ?? 0,
+      carrier_cod_fee: o.carrierCodFee,
+      carrier_cod_fee_type: o.carrierCodFeeType
     };
 
     const updateInSupabase = async () => {

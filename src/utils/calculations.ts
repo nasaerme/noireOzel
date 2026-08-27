@@ -61,13 +61,10 @@ export function calculateOrder(order: Order): OrderCalculation {
   if (isCod) {
     if (order.carrierCodFeeType === 'percentage') {
       carrierCodFeeCost = taxableAmount * ((order.carrierCodFee ?? 0) / 100);
-    } else if (order.carrierCodFeeType === 'tiered') {
-      carrierCodFeeCost = getTieredCarrierFee(taxableAmount);
-    } else if (order.carrierCodFee !== undefined && order.carrierCodFee !== null && order.carrierCodFee > 0) {
+    } else if (order.carrierCodFeeType === 'fixed' && order.carrierCodFee !== undefined && order.carrierCodFee !== null && order.carrierCodFee > 0) {
       carrierCodFeeCost = order.carrierCodFee;
     } else {
-      // Eski siparişlerde varsayılan kargo hizmet kesintisi 0 kabul edilir, geçmiş kâr/zarar verileri bozulmaz!
-      carrierCodFeeCost = 0;
+      carrierCodFeeCost = getTieredCarrierFee(taxableAmount);
     }
   }
 

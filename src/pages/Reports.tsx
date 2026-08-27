@@ -110,7 +110,7 @@ export default function Reports() {
     let pendingSubtotal = 0;
 
     let totalTax = 0, totalProductCost = 0;
-    let shippingCost = 0, packagingCost = 0, paymentCommission = 0, shopifyCommission = 0, totalCommission = 0;
+    let shippingCost = 0, packagingCost = 0, paymentCommission = 0, shopifyCommission = 0, totalCommission = 0, carrierCodFeeCost = 0;
     let giftCost = 0, totalDiscounts = 0, extraExpense = 0;
 
     let collectedOrderCosts = 0;
@@ -134,11 +134,12 @@ export default function Reports() {
         paymentCommission += calc.paymentCommissionCost;
         shopifyCommission += calc.shopifyCommissionCost;
         totalCommission += calc.totalCommissionCost;
+        carrierCodFeeCost += calc.carrierCodFeeCost;
         giftCost += calc.giftCost;
         totalDiscounts += calc.totalDiscount;
         extraExpense += calc.extraExpense;
 
-        const orderCost = calc.totalTax + calc.totalProductCost + calc.giftCost + calc.shippingCost + calc.packagingCost + calc.totalCommissionCost + calc.extraExpense;
+        const orderCost = calc.totalTax + calc.totalProductCost + calc.giftCost + calc.shippingCost + calc.packagingCost + calc.totalCommissionCost + calc.carrierCodFeeCost + calc.extraExpense;
 
         if (isPaid) {
           collectedSubtotal += calc.taxableAmount;
@@ -151,7 +152,7 @@ export default function Reports() {
     });
 
     const totalBusinessExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-    const totalOrderCosts = totalTax + totalProductCost + giftCost + shippingCost + packagingCost + totalCommission + extraExpense;
+    const totalOrderCosts = totalTax + totalProductCost + giftCost + shippingCost + packagingCost + totalCommission + carrierCodFeeCost + extraExpense;
     const totalExpensesAll = totalOrderCosts + totalBusinessExpenses;
 
     const grossProfit = subtotal - totalProductCost - giftCost;
