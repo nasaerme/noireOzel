@@ -578,8 +578,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
             restock_returned: i.restockReturned ?? true,
             custom_refund_amount: i.customRefundAmount ?? null
           }));
-          await supabase.from('order_items').insert(itemInserts);
           
+          let { error: itemErr } = await supabase.from('order_items').insert(itemInserts);
+          if (itemErr && (itemErr.message.includes('returned_quantity') || itemErr.message.includes('restock_returned') || itemErr.message.includes('custom_refund_amount') || itemErr.code === 'PGRST204' || itemErr.message.includes('column'))) {
+            console.warn("order_items new columns missing in DB, executing fallback insert:", itemErr.message);
+            const fallbackItems = itemInserts.map((r: any) => ({
+              id: r.id,
+              order_id: r.order_id,
+              product_id: r.product_id,
+              variant_id: r.variant_id,
+              quantity: r.quantity,
+              unit_sale_price: r.unit_sale_price,
+              unit_cost_price: r.unit_cost_price,
+              is_gift: r.is_gift
+            }));
+            const res = await supabase.from('order_items').insert(fallbackItems);
+            itemErr = res.error;
+          }
+
+          if (itemErr) {
+            console.error("Supabase order_items insert error:", itemErr);
+            toast.error("Sipariş Ürünleri Kayıt Hatası: " + itemErr.message);
+          }
+
           for (const item of o.items) {
             const latestV = await supabase.from('product_variants').select('stock').eq('id', item.variantId).single();
             if (latestV.data) {
@@ -627,10 +648,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Update order items in Supabase
+        // Update order items in Supabase safely
         for (const item of o.items) {
           if (item.id) {
-            await supabase.from('order_items').update({
+            let { error: itemErr } = await supabase.from('order_items').update({
               quantity: item.quantity,
               unit_sale_price: item.unitSalePrice,
               unit_cost_price: item.unitCostPrice,
@@ -639,6 +660,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
               restock_returned: item.restockReturned ?? true,
               custom_refund_amount: item.customRefundAmount ?? null,
             }).eq('id', item.id);
+
+            if (itemErr && (itemErr.message.includes('returned_quantity') || itemErr.message.includes('restock_returned') || itemErr.message.includes('custom_refund_amount') || itemErr.code === 'PGRST204' || itemErr.message.includes('column'))) {
+              await supabase.from('order_items').update({
+                quantity: item.quantity,
+                unit_sale_price: item.unitSalePrice,
+                unit_cost_price: item.unitCostPrice,
+                is_gift: item.isGift,
+              }).eq('id', item.id);
+            }
           }
         }
 
