@@ -29,6 +29,9 @@ export interface OrderItem {
   unitSalePrice: number;
   unitCostPrice: number;
   isGift: boolean;
+  returnedQuantity?: number; // İade edilen adet
+  restockReturned?: boolean; // Stoka geri eklendi mi? (False ise iç giyim/kusurlu - zayiat)
+  customRefundAmount?: number; // Özel/elle girilmiş net iade tutarı
 }
 
 export interface CarrierCodTier {
@@ -144,6 +147,8 @@ export interface OrderCalculation {
   profitMargin: number;
   isCancelled: boolean;
   cancellationPenalty: number;
+  partialRefundAmount?: number;
+  discardedProductCost?: number;
 }
 
 export interface CompetitorAd {

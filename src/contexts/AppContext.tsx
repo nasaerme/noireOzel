@@ -255,7 +255,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           fetchAllFromSupabase('supplier_invoices', 'id, date, supplier_name, invoice_type, items_summary, items, subtotal, total_tax, amount, payment_method, source_account_id, invoice_file_name, invoice_status, notes, created_at', 'created_at', false),
           fetchAllFromSupabase('expected_payouts', '*', 'created_at', false),
           fetchAllFromSupabase('upcoming_payables', '*', 'created_at', false),
-          fetchAllFromSupabase('official_invoices', 'id, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at', 'created_at', false)
+          fetchAllFromSupabase('official_invoices', 'id, company_id, company_name, type, invoice_number, date, party_name, party_tax_id, description, category, subtotal, tax_rate, tax_amount, total_amount, invoice_file_name, notes, created_at', 'created_at', false)
         ]);
 
         const getResData = (idx: number) => {
@@ -333,7 +333,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
               createdAt: o.created_at,
               items: (o.order_items || []).map((i: any) => ({
                 id: i.id, productId: i.product_id, variantId: i.variant_id, quantity: i.quantity,
-                unitSalePrice: i.unit_sale_price, unitCostPrice: i.unit_cost_price, isGift: i.is_gift
+                unitSalePrice: i.unit_sale_price, unitCostPrice: i.unit_cost_price, isGift: i.is_gift,
+                returnedQuantity: i.returned_quantity || 0,
+                restockReturned: i.restock_returned ?? true,
+                customRefundAmount: i.custom_refund_amount
               }))
             };
           }));
@@ -570,7 +573,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (o.items.length > 0) {
           const itemInserts = o.items.map(i => ({
             id: generateId(), order_id: id, product_id: i.productId, variant_id: i.variantId,
-            quantity: i.quantity, unit_sale_price: i.unitSalePrice, unit_cost_price: i.unitCostPrice, is_gift: i.isGift
+            quantity: i.quantity, unit_sale_price: i.unitSalePrice, unit_cost_price: i.unitCostPrice, is_gift: i.isGift,
+            returned_quantity: i.returnedQuantity || 0,
+            restock_returned: i.restockReturned ?? true,
+            custom_refund_amount: i.customRefundAmount ?? null
           }));
           await supabase.from('order_items').insert(itemInserts);
           
@@ -621,6 +627,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        // Update order items in Supabase
+        for (const item of o.items) {
+          if (item.id) {
+            await supabase.from('order_items').update({
+              quantity: item.quantity,
+              unit_sale_price: item.unitSalePrice,
+              unit_cost_price: item.unitCostPrice,
+              is_gift: item.isGift,
+              returned_quantity: item.returnedQuantity || 0,
+              restock_returned: item.restockReturned ?? true,
+              custom_refund_amount: item.customRefundAmount ?? null,
+            }).eq('id', item.id);
+          }
+        }
+
         setOrders(prev => {
           const oldOrder = prev.find(x => x.id === o.id);
           if (oldOrder) {
@@ -644,6 +665,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
               o.items.forEach(async item => {
                 const latestV = await supabase.from('product_variants').select('stock').eq('id', item.variantId).single();
                 if (latestV.data) supabase.from('product_variants').update({ stock: latestV.data.stock - item.quantity }).eq('id', item.variantId).then();
+              });
+            } else if (!isReturnedOrCanceled) {
+              // Partial return stock adjustments
+              o.items.forEach(async newItem => {
+                const oldItem = oldOrder.items.find(i => i.variantId === newItem.variantId);
+                const oldRestockedQty = oldItem ? ((oldItem.returnedQuantity || 0) * (oldItem.restockReturned ?? true ? 1 : 0)) : 0;
+                const newRestockedQty = (newItem.returnedQuantity || 0) * (newItem.restockReturned ?? true ? 1 : 0);
+                const stockDelta = newRestockedQty - oldRestockedQty;
+
+                if (stockDelta !== 0) {
+                  setVariants(vPrev => vPrev.map(v => v.id === newItem.variantId ? { ...v, stock: v.stock + stockDelta } : v));
+                  const latestV = await supabase.from('product_variants').select('stock').eq('id', newItem.variantId).single();
+                  if (latestV.data) {
+                    await supabase.from('product_variants').update({ stock: latestV.data.stock + stockDelta }).eq('id', newItem.variantId);
+                  }
+                }
               });
             }
           }

@@ -30,13 +30,57 @@ export function calculateOrder(order: Order): OrderCalculation {
   let subtotal = 0;
   let totalProductCost = 0;
   let giftCost = 0;
+  let partialRefundAmount = 0;
+  let discardedProductCost = 0;
 
+  // 1. Calculate Gross Subtotal (before any returns/discounts)
+  let grossSubtotal = 0;
   order.items.forEach(item => {
+    if (!item.isGift) {
+      grossSubtotal += item.unitSalePrice * item.quantity;
+    }
+  });
+
+  // 2. Order Discount (at order level)
+  let totalDiscount = order.discountAmount;
+  if (order.discountRate > 0) {
+    totalDiscount += grossSubtotal * (order.discountRate / 100);
+  }
+
+  // 3. Process each item (Active vs Returned, Cost & Net Refund Calculation)
+  order.items.forEach(item => {
+    const retQty = Math.min(item.quantity, Math.max(0, item.returnedQuantity || 0));
+    const activeQty = item.quantity - retQty;
+    const isRestocked = item.restockReturned ?? true;
+
     if (item.isGift) {
-      giftCost += item.unitCostPrice * item.quantity;
+      giftCost += item.unitCostPrice * activeQty;
+      if (retQty > 0 && !isRestocked) {
+        giftCost += item.unitCostPrice * retQty;
+        discardedProductCost += item.unitCostPrice * retQty;
+      }
     } else {
-      subtotal += item.unitSalePrice * item.quantity;
-      totalProductCost += item.unitCostPrice * item.quantity;
+      subtotal += item.unitSalePrice * activeQty;
+      totalProductCost += item.unitCostPrice * activeQty;
+
+      if (retQty > 0) {
+        let netRefundForItem = 0;
+        if (item.customRefundAmount !== undefined && item.customRefundAmount !== null && item.customRefundAmount >= 0) {
+          netRefundForItem = item.customRefundAmount;
+        } else {
+          const discountRatio = grossSubtotal > 0 ? (totalDiscount / grossSubtotal) : 0;
+          const unitNetPrice = item.unitSalePrice * (1 - discountRatio);
+          netRefundForItem = unitNetPrice * retQty;
+        }
+        partialRefundAmount += netRefundForItem;
+
+        // If returned item was NOT restocked (defective/hygiene), its unit cost remains as an expense/loss!
+        if (!isRestocked) {
+          const lossCost = item.unitCostPrice * retQty;
+          totalProductCost += lossCost;
+          discardedProductCost += lossCost;
+        }
+      }
     }
   });
 
@@ -47,14 +91,8 @@ export function calculateOrder(order: Order): OrderCalculation {
   const isCod = order.paymentMethod === 'kapida_odeme' || order.paymentMethod === 'kapida_odeme_kk' || order.paymentMethod === 'kapida_odeme_nakit';
   const codFee = isCod ? (order.codFee ?? 100) : 0;
 
-  // Discount
-  let totalDiscount = order.discountAmount;
-  if (order.discountRate > 0) {
-    totalDiscount += subtotal * (order.discountRate / 100);
-  }
-
-  // Taxable Amount includes subtotal - discount + codFee
-  const taxableAmount = Math.max(0, subtotal - totalDiscount + codFee);
+  const netRevenueFromProducts = Math.max(0, grossSubtotal - totalDiscount - partialRefundAmount);
+  const taxableAmount = Math.max(0, netRevenueFromProducts + codFee);
 
   // Kargo Firması Ek Hizmet Bedeli (Carrier COD fee)
   let carrierCodFeeCost = 0;
@@ -68,7 +106,7 @@ export function calculateOrder(order: Order): OrderCalculation {
     }
   }
 
-  // If order is cancelled or returned, customer revenue is 0 and products return to stock
+  // If order is cancelled or returned
   if (isCancelled) {
     let totalShippingPenalty = 0;
 
@@ -77,8 +115,6 @@ export function calculateOrder(order: Order): OrderCalculation {
       totalShippingPenalty = order.shippingCost * 2 + carrierCodFeeCost;
     } else {
       // İPTAL:
-      // Online Kredi Kartı / Havale sipariş iptali: Ürün henüz kargolanmadığı için kargo maliyeti 0 TL
-      // Kapıda ödeme sipariş iptali: Gidiş %100 + Dönüş %50 = 1.5 kat kargo maliyeti + kargo firması kapıda ödeme kesintisi
       const isOnlineOrTransfer = order.paymentMethod === 'kredi_karti' || order.paymentMethod === 'online_kredi_karti' || order.paymentMethod === 'havale' || order.paymentMethod === 'havale_eft';
       if (isOnlineOrTransfer) {
         totalShippingPenalty = 0;
@@ -111,6 +147,8 @@ export function calculateOrder(order: Order): OrderCalculation {
       profitMargin: 0,
       isCancelled: true,
       cancellationPenalty,
+      partialRefundAmount: 0,
+      discardedProductCost: 0,
     };
   }
 
@@ -129,7 +167,7 @@ export function calculateOrder(order: Order): OrderCalculation {
   const profitMargin = taxableAmount > 0 ? (netProfit / taxableAmount) * 100 : 0;
 
   return {
-    subtotal,
+    subtotal: netRevenueFromProducts,
     codFee,
     totalDiscount,
     taxableAmount,
@@ -149,5 +187,7 @@ export function calculateOrder(order: Order): OrderCalculation {
     profitMargin,
     isCancelled: false,
     cancellationPenalty: 0,
+    partialRefundAmount,
+    discardedProductCost,
   };
 }

@@ -297,10 +297,21 @@ export default function Orders() {
                             </p>
                           )}
                         </div>
-                      ) : o.paymentStatus === 'odendi' ? (
-                        <Badge variant="secondary" className="bg-success/20 text-success hover:bg-success/30 text-[11px]">✅ Ödendi</Badge>
                       ) : (
-                        <Badge variant="secondary" className="bg-warning/20 text-warning hover:bg-warning/30 text-[11px]">⏳ Beklemede</Badge>
+                        <div className="space-y-1">
+                          {o.paymentStatus === 'odendi' ? (
+                            <Badge variant="secondary" className="bg-success/20 text-success hover:bg-success/30 text-[11px]">✅ Ödendi</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="bg-warning/20 text-warning hover:bg-warning/30 text-[11px]">⏳ Beklemede</Badge>
+                          )}
+                          {calc.partialRefundAmount && calc.partialRefundAmount > 0 ? (
+                            <div>
+                              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]">
+                                🔄 Kısmi İade (-{formatCurrency(calc.partialRefundAmount, sym)})
+                              </Badge>
+                            </div>
+                          ) : null}
+                        </div>
                       )}
                     </td>
                     <td className="p-3 text-xs">{o.city ? `${o.city} / ${o.district || ''}` : '-'}</td>
@@ -576,17 +587,37 @@ function OrderDetail({
         {order.items.map((item, i) => {
           const p = getProduct(item.productId);
           const v = getVariant(item.variantId);
+          const retQty = item.returnedQuantity || 0;
+          const isRestocked = item.restockReturned ?? true;
+
           return (
-            <div key={i} className="flex justify-between py-2 border-b border-border/50 text-sm">
-              <div>
-                <span className="font-medium">{p?.name}</span> - {v?.name}
-                {item.isGift && <Badge variant="secondary" className="ml-2 text-[10px]">Hediye</Badge>}
+            <div key={i} className="py-2 border-b border-border/50 text-sm space-y-1">
+              <div className="flex justify-between">
+                <div>
+                  <span className="font-medium">{p?.name}</span> - {v?.name}
+                  {item.isGift && <Badge variant="secondary" className="ml-2 text-[10px]">Hediye</Badge>}
+                </div>
+                <div className="text-right">
+                  <span>{item.quantity} × {formatCurrency(item.unitSalePrice, sym)}</span>
+                  {!item.isGift && <span className="ml-3 font-medium">{formatCurrency(item.unitSalePrice * item.quantity, sym)}</span>}
+                  {item.isGift && <span className="ml-3 text-muted-foreground">₺0,00</span>}
+                </div>
               </div>
-              <div className="text-right">
-                <span>{item.quantity} × {formatCurrency(item.unitSalePrice, sym)}</span>
-                {!item.isGift && <span className="ml-3 font-medium">{formatCurrency(item.unitSalePrice * item.quantity, sym)}</span>}
-                {item.isGift && <span className="ml-3 text-muted-foreground">₺0,00</span>}
-              </div>
+
+              {retQty > 0 && (
+                <div className="flex items-center justify-between text-xs bg-amber-500/10 border border-amber-500/30 p-1.5 rounded-lg text-amber-700 dark:text-amber-300">
+                  <span className="flex items-center gap-1 font-medium">
+                    <RotateCcw className="h-3 w-3" /> {retQty} Adet İade Edildi
+                  </span>
+                  <span className="text-[11px]">
+                    {isRestocked ? (
+                      <span className="text-emerald-600 font-medium">✅ Depo Stokuna Eklendi</span>
+                    ) : (
+                      <span className="text-destructive font-medium">❌ Depoya Alınmadı (Kusurlu/İç Giyim Zayiat)</span>
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -596,11 +627,17 @@ function OrderDetail({
         <Row label="Ara Toplam" value={formatCurrency(calc.subtotal, sym)} />
         {isCOD && calc.codFee > 0 && <Row label="Müşteri Kapıda Ödeme Hizmet Bedeli" value={`+${formatCurrency(calc.codFee, sym)}`} accent />}
         <Row label="Toplam İndirim" value={`-${formatCurrency(calc.totalDiscount, sym)}`} />
-        <Row label="Sipariş Toplamı" value={formatCurrency(calc.taxableAmount, sym)} bold />
+        {calc.partialRefundAmount && calc.partialRefundAmount > 0 ? (
+          <Row label="Kısmi İade Tutarı" value={`-${formatCurrency(calc.partialRefundAmount, sym)}`} accent />
+        ) : null}
+        <Row label="Net Sipariş Tahsilatı (Matrah)" value={formatCurrency(calc.taxableAmount, sym)} bold />
         <div className="border-t border-border my-2" />
         <Row label={`Vergiler (KDV %${order.taxRate} Dahil)`} value={formatCurrency(calc.totalTax, sym)} />
         <div className="border-t border-border my-2" />
         <Row label="Ürün Maliyeti" value={formatCurrency(calc.totalProductCost, sym)} />
+        {calc.discardedProductCost && calc.discardedProductCost > 0 ? (
+          <Row label="  └ Zarara Yazılan Kusurlu/İç Giyim Maliyeti" value={formatCurrency(calc.discardedProductCost, sym)} />
+        ) : null}
         {calc.giftCost > 0 && <Row label="Hediye Maliyeti" value={formatCurrency(calc.giftCost, sym)} />}
         <Row label="Kargo Maliyeti" value={formatCurrency(calc.shippingCost, sym)} />
         {calc.carrierCodFeeCost > 0 && <Row label="Kargo Kapıda Öd. Kesintisi" value={formatCurrency(calc.carrierCodFeeCost, sym)} />}

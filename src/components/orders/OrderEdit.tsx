@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
-import { Order } from "@/types";
+import { Order, OrderItem } from "@/types";
 import { getTieredCarrierFee, calculateOrder } from "@/utils/calculations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { CreditCard, Banknote, Landmark, Smartphone, Hash, MapPin, AlertCircle, Save, Truck } from "lucide-react";
+import { CreditCard, Banknote, Landmark, Smartphone, Hash, MapPin, AlertCircle, Save, Truck, RotateCcw, PackageCheck, PackageX, ShoppingBag, ShieldAlert } from "lucide-react";
 import citiesData from "@/data/cities.json";
+import { formatCurrency } from "@/utils/formatters";
 
 export default function OrderEdit({ order, onClose }: { order: Order; onClose: () => void }) {
-  const { updateOrder, settings } = useApp();
+  const { updateOrder, settings, getProduct, getVariant } = useApp();
   const sym = settings.currencySymbol;
 
   const [orderNumber, setOrderNumber] = useState(order.orderNumber || "");
@@ -35,12 +36,49 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
     order.orderDate ? order.orderDate.split('T')[0] : new Date().toISOString().split('T')[0]
   );
 
+  // Order items state for item-level return management
+  const [items, setItems] = useState<OrderItem[]>(
+    (order.items || []).map(i => ({
+      ...i,
+      returnedQuantity: i.returnedQuantity ?? 0,
+      restockReturned: i.restockReturned ?? true,
+      customRefundAmount: i.customRefundAmount,
+    }))
+  );
+
   const selectedCityData = citiesData.find(c => c.name === city);
   const districtOptions = selectedCityData ? selectedCityData.districts : [];
 
+  // Calculate gross total & discount ratio for pro-rata helper
+  const grossSubtotal = items.reduce((acc, i) => acc + (i.isGift ? 0 : i.unitSalePrice * i.quantity), 0);
+  let totalOrderDiscount = order.discountAmount;
+  if (order.discountRate > 0) {
+    totalOrderDiscount += grossSubtotal * (order.discountRate / 100);
+  }
+  const discountRatio = grossSubtotal > 0 ? (totalOrderDiscount / grossSubtotal) : 0;
+
+  const handleItemReturnChange = (index: number, field: keyof OrderItem, val: any) => {
+    setItems(prev => {
+      const copy = [...prev];
+      const target = { ...copy[index], [field]: val };
+
+      if (field === 'returnedQuantity') {
+        const retQty = Math.min(target.quantity, Math.max(0, Number(val) || 0));
+        target.returnedQuantity = retQty;
+        
+        // Recalculate default net refund amount when return quantity changes
+        const defaultNetPrice = target.unitSalePrice * (1 - discountRatio);
+        target.customRefundAmount = Number((defaultNetPrice * retQty).toFixed(2));
+      }
+
+      copy[index] = target;
+      return copy;
+    });
+  };
+
   const handlePaymentMethodChange = (v: string) => {
     setPaymentMethod(v);
-    const calcCurrent = calculateOrder({ ...order, paymentMethod: v });
+    const calcCurrent = calculateOrder({ ...order, items, paymentMethod: v });
     const autoCarrierFee = getTieredCarrierFee(calcCurrent.taxableAmount);
 
     if (v === 'online_kredi_karti' || v === 'kredi_karti') {
@@ -64,11 +102,27 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
 
   const isCod = paymentMethod === 'kapida_odeme' || paymentMethod === 'kapida_odeme_kk' || paymentMethod === 'kapida_odeme_nakit';
 
+  // Live calculation for preview
+  const currentCalc = calculateOrder({
+    ...order,
+    items,
+    taxRate,
+    shippingCost,
+    paymentMethod,
+    paymentCommissionRate,
+    codFee: isCod ? codFee : 0,
+    carrierCodFee: isCod ? carrierCodFee : 0,
+    carrierCodFeeType: 'fixed',
+    orderStatus,
+    paymentStatus
+  });
+
   const handleSave = () => {
     const orderDateISO = orderDate ? new Date(orderDate.includes('T') ? orderDate : `${orderDate}T12:00:00`).toISOString() : order.orderDate;
 
     updateOrder({
       ...order,
+      items,
       orderNumber,
       orderDate: orderDateISO,
       taxRate,
@@ -85,7 +139,7 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
       carrierCodFeeType: 'fixed',
       cancellationReason,
     });
-    toast.success("Sipariş güncellendi");
+    toast.success("Sipariş ve kısmi iade bilgileri güncellendi");
     onClose();
   };
 
@@ -132,7 +186,112 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
         </div>
       </div>
 
-      {/* 2. Ödeme Yöntemi & Durum Kartı */}
+      {/* 2. Sipariş Kalemleri & İade / Kusur Yönetimi Kartı */}
+      <div className="p-4 bg-card border border-border/70 rounded-2xl shadow-xs space-y-3">
+        <div className="flex items-center justify-between border-b border-border/40 pb-2">
+          <span className="font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
+            <ShoppingBag className="h-3.5 w-3.5 text-primary" /> Ürünler & Kısmi İade / Kusurlu Ürün Yönetimi
+          </span>
+          {currentCalc.partialRefundAmount && currentCalc.partialRefundAmount > 0 ? (
+            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[11px] gap-1 font-semibold">
+              <RotateCcw className="h-3 w-3" /> Kısmi İade: {formatCurrency(currentCalc.partialRefundAmount, sym)}
+            </Badge>
+          ) : null}
+        </div>
+
+        <div className="space-y-3 divide-y divide-border/40">
+          {items.map((item, idx) => {
+            const product = getProduct(item.productId);
+            const variant = getVariant(item.variantId);
+            const retQty = item.returnedQuantity || 0;
+            const isRestocked = item.restockReturned ?? true;
+            const unitNetPrice = item.unitSalePrice * (1 - discountRatio);
+
+            return (
+              <div key={item.id || idx} className="pt-3 first:pt-0 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="font-semibold text-xs text-foreground">{product?.name || 'Ürün'}</span>
+                    <span className="text-muted-foreground ml-1">({variant?.name || 'Varyant'})</span>
+                    {item.isGift && <Badge variant="secondary" className="ml-1.5 text-[10px]">Hediye</Badge>}
+                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                      Sipariş Adedi: <strong>{item.quantity}</strong> × {formatCurrency(item.unitSalePrice, sym)}
+                      {discountRatio > 0 && (
+                        <span className="ml-1.5 text-amber-600 dark:text-amber-400 font-medium">
+                          (Kampanyalı Net Birim: {formatCurrency(unitNetPrice, sym)})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Return Controls */}
+                  <div className="flex flex-wrap items-center gap-2 bg-secondary/30 p-2 rounded-xl border border-border/50">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground block mb-0.5 font-medium">İade Adedi</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={item.quantity}
+                        value={retQty}
+                        onChange={e => handleItemReturnChange(idx, 'returnedQuantity', Number(e.target.value))}
+                        className="h-7 w-16 text-xs text-center font-bold"
+                      />
+                    </div>
+
+                    {retQty > 0 && (
+                      <>
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground block mb-0.5 font-medium">Stok Durumu</Label>
+                          <Select
+                            value={isRestocked ? 'true' : 'false'}
+                            onValueChange={v => handleItemReturnChange(idx, 'restockReturned', v === 'true')}
+                          >
+                            <SelectTrigger className={`h-7 text-[11px] font-medium ${!isRestocked ? 'border-destructive text-destructive bg-destructive/10' : 'text-emerald-600 border-emerald-500/40 bg-emerald-500/10'}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="true">
+                                <span className="flex items-center gap-1 text-emerald-600 font-medium"><PackageCheck className="h-3.5 w-3.5" /> Stoka Geri Ekle (Sağlam)</span>
+                              </SelectItem>
+                              <SelectItem value="false">
+                                <span className="flex items-center gap-1 text-destructive font-medium"><PackageX className="h-3.5 w-3.5" /> Stoka Ekleme (İç Giyim/Kusur)</span>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground block mb-0.5 font-medium">Net İade Tutarı ({sym})</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={item.customRefundAmount ?? Number((unitNetPrice * retQty).toFixed(2))}
+                            onChange={e => handleItemReturnChange(idx, 'customRefundAmount', Number(e.target.value))}
+                            className="h-7 w-24 text-xs font-semibold text-amber-600 bg-background"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Notice for non-restocked returned items */}
+                {retQty > 0 && !isRestocked && (
+                  <div className="p-2 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-[11px] flex items-center gap-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                    <span>
+                      Bu ürün <strong>depo stokuna eklenmeyecek</strong> (iç giyim / imha / müşteride kaldı). 
+                      Alış maliyeti (<strong>{formatCurrency(item.unitCostPrice * retQty, sym)}</strong>) sipariş zararına yansıtılacaktır.
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. Ödeme Yöntemi & Durum Kartı */}
       <div className="p-4 bg-card border border-border/70 rounded-2xl shadow-xs space-y-3">
         <span className="font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 text-[11px] border-b border-border/40 pb-2">
           <CreditCard className="h-3.5 w-3.5 text-primary" /> Ödeme & Durum Ayarları
@@ -235,7 +394,7 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
         )}
       </div>
 
-      {/* 3. Maliyet & Notlar Kartı */}
+      {/* 4. Maliyet & Notlar Kartı */}
       <div className="p-4 bg-card border border-border/70 rounded-2xl shadow-xs space-y-3">
         <div className="grid grid-cols-3 gap-3">
           <div><Label className="text-[11px]">POS Oranı (%)</Label><Input type="number" step="0.01" value={paymentCommissionRate} onChange={e => setPaymentCommissionRate(Number(e.target.value))} className="h-8 text-xs mt-1" /></div>
@@ -258,3 +417,4 @@ export default function OrderEdit({ order, onClose }: { order: Order; onClose: (
     </div>
   );
 }
+
