@@ -1,7 +1,17 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLibRaw from 'pdfjs-dist';
+import pdfWorkerCode from 'pdfjs-dist/build/pdf.worker.js?raw';
 
-// Set pdfjs worker source using CDN for reliable browser execution
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+const pdfjsLib: any = (pdfjsLibRaw as any).default || pdfjsLibRaw;
+
+// Set pdfjs worker source using an inline Blob URL so Vite dev server /@fs/ worker paths never trigger SecurityErrors
+try {
+  const blob = new Blob([pdfWorkerCode], { type: 'text/javascript' });
+  if (pdfjsLib.GlobalWorkerOptions) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+  }
+} catch (err) {
+  console.warn("Failed to create inline PDF worker Blob:", err);
+}
 
 export interface ParsedInvoiceData {
   invoiceNumber: string;
@@ -43,7 +53,14 @@ export function parseTurkMoney(str: string): number {
  */
 export async function extractTextFromPdf(file: File): Promise<{ text: string; lines: string[] }> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  
+  const loadingTask = pdfjsLib.getDocument({
+    data: arrayBuffer,
+    useSystemFonts: true,
+    isEvalSupported: false,
+  });
+
+  const pdf = await loadingTask.promise;
   let fullText = '';
   const lines: string[] = [];
 
@@ -52,12 +69,12 @@ export async function extractTextFromPdf(file: File): Promise<{ text: string; li
     const tokenizedText = await page.getTextContent();
     
     // Sort items by Y position then X position to preserve line reading order
-    const items = tokenizedText.items as any[];
+    const items = (tokenizedText.items as any[]).filter(item => item && typeof item.str === 'string');
     let currentY: number | null = null;
     let currentLine = '';
 
     items.forEach((item: any) => {
-      const y = Math.round(item.transform[5]);
+      const y = (item.transform && item.transform[5] !== undefined) ? Math.round(item.transform[5]) : 0;
       if (currentY === null || Math.abs(currentY - y) > 3) {
         if (currentLine.trim()) {
           lines.push(currentLine.trim());
@@ -99,19 +116,21 @@ export async function parseInvoicePdf(file: File): Promise<ParsedInvoiceData> {
     let taxAmount = 0;
     let totalAmount = 0;
 
-    // 1. Fatura No Matching (GİB E-Arşiv Fatura No e.g. GIB2026000000838)
-    const invNoMatch = text.match(/(?:Fatura No|Fatura No:|ETN|E-Fatura No|Özelleştirme No)\s*:?\s*([A-Z0-9]{13,16})/i) ||
-                       cleanText.match(/\b([A-Z]{3}20\d{2}\d{8,12})\b/) ||
-                       cleanText.match(/\b(GIB20\d{11})\b/);
-    if (invNoMatch) {
-      invoiceNumber = invNoMatch[1].trim();
+    // 1. Fatura No Matching (Support INT2026000000006, GIB2026..., EAR2026..., etc. - 3 letters + 13 numbers)
+    const inv16Match = cleanText.match(/\b([A-Z]{3}\d{13})\b/i);
+    const invLabeledMatch = text.match(/(?:Fatura No|Fatura No:|Fatura Numarası|ETTN|E-Fatura No)\s*:?\s*([A-Z0-9]{13,16})/i);
+    
+    if (inv16Match) {
+      invoiceNumber = inv16Match[1].toUpperCase();
+    } else if (invLabeledMatch) {
+      invoiceNumber = invLabeledMatch[1].trim();
     }
 
-    // 2. Fatura Tarihi Matching (Örn: 14-08-2026 23:54 or 14.08.2026 or 14/08/2026)
+    // 2. Fatura Tarihi Matching (e.g., 28-08-2026, 28.08.2026, 28/08/2026)
     const dateMatch = text.match(/(?:Fatura Tarihi|Düzenleme Tarihi|Tarih)\s*:?\s*(\d{2}[-\./]\d{2}[-\./]\d{4})(?:\s+\d{2}:\d{2})?/i) ||
                       cleanText.match(/\b(\d{2}[-\./]\d{2}[-\./]\d{4})\b/);
     if (dateMatch) {
-      const rawDate = dateMatch[1]; // e.g. 14-08-2026
+      const rawDate = dateMatch[1]; // e.g. 28-08-2026
       const parts = rawDate.split(/[-\./]/);
       if (parts.length === 3) {
         if (parts[0].length === 2 && parts[2].length === 4) {
@@ -124,61 +143,78 @@ export async function parseInvoicePdf(file: File): Promise<ParsedInvoiceData> {
       }
     }
 
-    // 3. Buyer (Sayın Section) Matching
-    // Look for SAYIN followed by name line
+    // 3. Smart Seller Name vs Buyer Name Extraction
+    // SAYIN index divides Seller section (above SAYIN) and Buyer section (below SAYIN)
+    let sayinLineIndex = -1;
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (line.toUpperCase().includes('SAYIN')) {
-        // Next line or rest of line is party name
-        const inlinePart = line.replace(/SAYIN\s*:?/i, '').trim();
+      if (lines[i].toUpperCase().includes('SAYIN')) {
+        sayinLineIndex = i;
+        // Extract Buyer (Sayın) Name
+        const inlinePart = lines[i].replace(/SAYIN\s*:?/i, '').trim();
         if (inlinePart.length > 2) {
           partyName = inlinePart;
         } else if (i + 1 < lines.length) {
           partyName = lines[i + 1].trim();
         }
-      }
-
-      // Check for Seller Name at top of invoice (e.g., MUSTAFA ATAR before address)
-      if (i < 5 && !sellerName && line.trim() && !line.includes(':') && !line.includes('/') && line.length > 3) {
-        if (!line.includes('15.08') && !line.includes('e-Belge') && !line.includes('Fatura')) {
-          sellerName = line.trim();
-        }
+        break;
       }
     }
 
-    // 4. VKN / TCKN Matching (Seller vs Buyer)
-    const tcknMatches = [...text.matchAll(/(?:TCKN|VKN|Vergi No|Vergi Kimlik No|T\.C\. No)\s*:?\s*(\d{10,11})/gi)];
-    if (tcknMatches.length > 0) {
-      // If 2 TCKNs found, first is seller, second is buyer
-      if (tcknMatches.length >= 2) {
-        sellerTaxId = tcknMatches[0][1];
-        partyTaxId = tcknMatches[1][1];
-      } else {
-        partyTaxId = tcknMatches[0][1];
-      }
+    // Extract Seller Name from lines before SAYIN (top left of invoice)
+    const topLinesLimit = sayinLineIndex > 0 ? sayinLineIndex : Math.min(12, lines.length);
+    const sellerCandidates: string[] = [];
+
+    for (let i = 0; i < topLinesLimit; i++) {
+      const line = lines[i].trim();
+      const upper = line.toUpperCase();
+
+      // Skip common non-company header lines
+      if (!line || line.length < 3) continue;
+      if (upper.includes('E-ARŞİV') || upper.includes('E-FATURA') || upper.includes('ETTN') || upper.includes('ÖZELLEŞTİRME')) continue;
+      if (upper.includes('FATURA NO') || upper.includes('DÜZENLEME') || upper.includes('SİPARİŞ') || upper.includes('SENARYO')) continue;
+      if (upper.includes('TEL:') || upper.includes('E-POSTA:') || upper.includes('WEB SİTESİ') || upper.includes('VERGİ DAİRESİ') || upper.includes('VKN:') || upper.includes('TCKN:')) continue;
+      if (upper.includes('MAH.') || upper.includes('CAD.') || upper.includes('SOK.') || upper.includes('NO:') || upper.includes('PK:') || upper.includes('PENDİK') || upper.includes('İSTANBUL') || upper.includes('ANKARA') || upper.includes('TÜRKİYE')) continue;
+
+      sellerCandidates.push(line);
     }
 
-    // 5. Total Amount (Ödenecek Tutar / Vergiler Dahil Toplam Tutar / Genel Toplam)
+    if (sellerCandidates.length > 0) {
+      // Pick first non-generic candidate (e.g., "THE NOIRE İÇ VE DİŞ TİCARET LİMİTED ŞİRKETİ")
+      sellerName = sellerCandidates[0];
+    }
+
+    // 4. VKN / TCKN Extraction (Seller VKN before SAYIN vs Buyer TCKN after SAYIN)
+    const allTaxMatches = [...text.matchAll(/(?:TCKN|VKN|Vergi No|Vergi Kimlik No|T\.C\. No)\s*:?\s*(\d{10,11})/gi)];
+    if (allTaxMatches.length >= 2) {
+      sellerTaxId = allTaxMatches[0][1];
+      partyTaxId = allTaxMatches[1][1];
+    } else if (allTaxMatches.length === 1) {
+      partyTaxId = allTaxMatches[0][1];
+    }
+
+    // 5. Financial Totals
+    // Total Amount (Ödenecek Tutar / Vergiler Dahil Toplam Tutar / Genel Toplam)
     const totalMatch = text.match(/(?:Ödenecek Tutar|Vergiler Dahil Toplam Tutar|Genel Toplam|Fatura Toplamı)\s*:?\s*([\d\.,]+(?:\s*TL)?)/i);
     if (totalMatch) {
       totalAmount = parseTurkMoney(totalMatch[1]);
     }
 
-    // 6. Subtotal (Mal Hizmet Toplam Tutarı / KDV Matrahı)
+    // Subtotal (Mal Hizmet Toplam Tutarı / KDV Matrahı)
     const subtotalMatch = text.match(/(?:Mal Hizmet Toplam Tutarı|Mal Hizmet Toplamı|KDV Matrahı|Matrah)\s*:?\s*([\d\.,]+(?:\s*TL)?)/i);
     if (subtotalMatch) {
       subtotal = parseTurkMoney(subtotalMatch[1]);
     }
 
-    // 7. KDV Amount & Rate (Hesaplanan KDV(%10) / KDV Tutarı)
-    const kdvRateMatch = text.match(/KDV\s*\(\s*%?\s*(\d+)\s*\)|%(\d{1,2})/i);
-    if (kdvRateMatch) {
-      taxRate = parseInt(kdvRateMatch[1] || kdvRateMatch[2], 10);
-    }
-
-    const kdvAmountMatch = text.match(/(?:Hesaplanan KDV(?:\(\s*%?\d+\s*\))?|KDV Tutarı|KDV Toplamı)\s*:?\s*([\d\.,]+(?:\s*TL)?)/i);
+    // KDV Amount (Supports "Hesaplanan KDV GERCEK(%10)", "Hesaplanan KDV (%10)", "KDV Tutarı", etc.)
+    const kdvAmountMatch = text.match(/(?:Hesaplanan\s+KDV(?:\s+GERÇEK|\s+GERCEK)?(?:\s*\(\s*%?\s*\d+\s*%\s*\)|\s*\(\s*%?\s*\d+\s*\))?|KDV\s+Tutarı|KDV\s+Toplamı|İndirilecek\s+KDV)\s*:?\s*([\d\.,]+(?:\s*TL)?)/i);
     if (kdvAmountMatch) {
       taxAmount = parseTurkMoney(kdvAmountMatch[1]);
+    }
+
+    // KDV Rate Matching (%10, %20, %1, etc.)
+    const kdvRateMatch = text.match(/KDV\s*(?:GERÇEK|GERCEK)?\s*\(\s*%?\s*(\d+)\s*%\s*\)|KDV\s*\(\s*%?\s*(\d+)\s*\)|%(\d{1,2})/i);
+    if (kdvRateMatch) {
+      taxRate = parseInt(kdvRateMatch[1] || kdvRateMatch[2] || kdvRateMatch[3], 10);
     }
 
     // Deduce any missing financial totals
@@ -199,31 +235,61 @@ export async function parseInvoicePdf(file: File): Promise<ParsedInvoiceData> {
     // Deduce Tax Rate if rate was missed but amounts exist
     if (subtotal > 0 && taxAmount > 0 && (taxRate === 0 || taxRate === 20)) {
       const calculatedRate = Math.round((taxAmount / subtotal) * 100);
-      if ([1, 10, 20].includes(calculatedRate)) {
+      if ([1, 8, 10, 18, 20].includes(calculatedRate)) {
         taxRate = calculatedRate;
       }
     }
 
-    // 8. Description / Product Name (Örn: Xena Vücut Çorabı)
-    const productMatch = text.match(/1\s+([A-Za-zĞÜŞİÖÇğüşiöç0-9\s\.\-]+)\s+1\s+Adet/i) ||
-                         cleanText.match(/Mal Hizmet\s*([A-Za-zĞÜŞİÖÇğüşiöç0-9\s\.\-]{3,40})\s*1\s*Adet/i);
-    if (productMatch) {
-      description = productMatch[1].trim();
-    } else {
-      description = `E-Fatura - ${partyName || 'Satış/Alış Faturası'}`;
+    // 6. Product Descriptions (Line items extraction)
+    const productItems: string[] = [];
+    let inTableSection = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes('Mal Hizmet') || line.includes('Sıra No')) {
+        inTableSection = true;
+        continue;
+      }
+      if (line.includes('Mal Hizmet Toplam Tutarı') || line.includes('Toplam İskonto') || line.includes('Yalnız ')) {
+        inTableSection = false;
+        break;
+      }
+
+      if (inTableSection) {
+        // Look for line item pattern: Starts with Sıra No (1, 2, 3...) followed by product name
+        const itemMatch = line.match(/^\d+\s+([A-Za-zĞÜŞİÖÇğüşiöç0-9\s\.\-\(\)\/&%,\+]{3,80})/);
+        if (itemMatch) {
+          let itemName = itemMatch[1].replace(/\s+\d+\s+Adet.*$/i, '').trim();
+          itemName = itemName.replace(/\s+\d+[\.,]\d+.*$/i, '').trim(); // strip quantities/prices
+          if (itemName.length > 2 && !itemName.toUpperCase().startsWith('SIRA') && !itemName.toUpperCase().startsWith('MAL HİZMET')) {
+            productItems.push(itemName);
+          }
+        }
+      }
     }
 
-    // Default Fallbacks
+    if (productItems.length > 0) {
+      if (productItems.length === 1) {
+        description = productItems[0];
+      } else {
+        description = `${productItems[0]} (+${productItems.length - 1} ürün daha)`;
+      }
+    } else {
+      const genericParty = sellerName || partyName || 'Satış/Alış Faturası';
+      description = `E-Fatura - ${genericParty}`;
+    }
+
+    // Fallbacks
     if (!partyName) {
       partyName = sellerName || file.name.replace(/\.[^/.]+$/, '');
     }
 
     return {
-      invoiceNumber: invoiceNumber || `GIB${Date.now().toString().slice(-13)}`,
+      invoiceNumber: invoiceNumber || `INT${Date.now().toString().slice(-13)}`,
       date,
       partyName,
       partyTaxId,
-      sellerName,
+      sellerName: sellerName || partyName,
       sellerTaxId,
       description,
       subtotal,
@@ -236,7 +302,7 @@ export async function parseInvoicePdf(file: File): Promise<ParsedInvoiceData> {
   } catch (error) {
     console.error("PDF Fatura okuma hatası:", error);
     return {
-      invoiceNumber: `GIB${Date.now().toString().slice(-13)}`,
+      invoiceNumber: `INT${Date.now().toString().slice(-13)}`,
       date: new Date().toISOString().split('T')[0],
       partyName: file.name.replace(/\.[^/.]+$/, ''),
       partyTaxId: '',

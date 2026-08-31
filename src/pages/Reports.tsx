@@ -22,7 +22,11 @@ import {
   Percent,
   Layers,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Landmark,
+  Clock,
+  CheckCircle2,
+  CheckCircle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -481,7 +485,7 @@ export default function Reports() {
         gelir: st.gelir,
       }));
 
-    // --- PAYMENT METHOD & COD ANALYTICS ---
+    // --- PAYMENT METHOD, COD & HAVALE ANALYTICS ---
     let creditCardOrdersCount = 0;
     let creditCardTotalRevenue = 0;
 
@@ -500,6 +504,10 @@ export default function Reports() {
     let transferPaidRevenue = 0;
     let transferPendingCount = 0;
     let transferPendingRevenue = 0;
+    let transferCancelledCount = 0;
+    let transferCancelledRevenue = 0;
+
+    const transferPendingOrdersList: typeof filteredOrders = [];
 
     filteredOrders.forEach(o => {
       const calc = calculateOrder(o);
@@ -524,7 +532,10 @@ export default function Reports() {
         }
       } else if (cat === 'havale') {
         transferOrdersCount++;
-        if (!isCancelled) {
+        if (isCancelled) {
+          transferCancelledCount++;
+          transferCancelledRevenue += calc.taxableAmount;
+        } else {
           transferTotalRevenue += calc.taxableAmount;
           if (isPaid) {
             transferPaidCount++;
@@ -532,6 +543,7 @@ export default function Reports() {
           } else {
             transferPendingCount++;
             transferPendingRevenue += calc.taxableAmount;
+            transferPendingOrdersList.push(o);
           }
         }
       } else { // kredi_karti
@@ -539,10 +551,6 @@ export default function Reports() {
         if (!isCancelled) {
           if (isPaid) {
             creditCardTotalRevenue += calc.taxableAmount;
-          } else {
-            // Ödenmemiş KK siparişleri de bekleyen ciroya yazılır
-            transferPendingCount++;
-            transferPendingRevenue += calc.taxableAmount;
           }
         }
       }
@@ -567,11 +575,11 @@ export default function Reports() {
       totalBusinessExpenses, grossProfit, netProfit, collectedNetProfit, pendingNetProfit, profitMargin, collectedProfitMargin,
       topProducts, topVariants, allProductsList, allVariantsList, expBreakdown, timeData, mapColors, mapTooltips, topCities,
       hasProductSales,
-      // Payment & COD metrics
+      // Payment & COD & Havale metrics
       periodAllOrdersCount: filteredOrders.length,
       creditCardOrdersCount, creditCardTotalRevenue,
       codOrdersCount, codTotalRevenue, codPaidCount, codPaidRevenue, codPendingCount, codPendingRevenue, codCancelledCount, codCancellationPenaltyTotal, codCancelRate,
-      transferOrdersCount, transferTotalRevenue, transferPaidCount, transferPaidRevenue, transferPendingCount, transferPendingRevenue,
+      transferOrdersCount, transferTotalRevenue, transferPaidCount, transferPaidRevenue, transferPendingCount, transferPendingRevenue, transferCancelledCount, transferCancelledRevenue, transferPendingOrdersList,
       totalCollectedRevenue, totalPendingRevenue, totalGrossRevenue, totalPendingOrdersCount, paymentMethodPieData,
       // Return & Cancellation metrics
       returnedOrdersCount,
@@ -1353,29 +1361,55 @@ export default function Reports() {
 
         {/* TAB 4: ÖDEME & VALÖR */}
         <TabsContent value="payment" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Summary KPI Banner */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="p-3.5 bg-card border border-border rounded-xl shadow-sm">
+              <span className="text-[11px] text-muted-foreground font-semibold block uppercase tracking-wider">💰 Toplam Bekleyen Valör (Gelecek Ciro)</span>
+              <span className="text-xl font-bold text-amber-500 mt-1 block">{formatCurrency(metrics.totalPendingRevenue, sym)}</span>
+              <span className="text-[11px] text-muted-foreground block mt-1">{metrics.totalPendingOrdersCount} Sipariş Tahsilat / Onay Bekliyor</span>
+            </div>
+            <div className="p-3.5 bg-emerald-500/5 border border-emerald-500/30 rounded-xl shadow-sm">
+              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block uppercase tracking-wider">🏛️ Bekleyen EFT / Havale Valörü</span>
+              <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">{formatCurrency(metrics.transferPendingRevenue, sym)}</span>
+              <span className="text-[11px] text-muted-foreground block mt-1">{metrics.transferPendingCount} Havale Siparişi Hesaba Geçiş Bekliyor</span>
+            </div>
+            <div className="p-3.5 bg-amber-500/5 border border-amber-500/30 rounded-xl shadow-sm">
+              <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold block uppercase tracking-wider">📦 Bekleyen Kapıda Ödeme Valörü</span>
+              <span className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1 block">{formatCurrency(metrics.codPendingRevenue, sym)}</span>
+              <span className="text-[11px] text-muted-foreground block mt-1">{metrics.codPendingCount} Kapıda Ödeme Teslimat/Kargo Bekliyor</span>
+            </div>
+            <div className="p-3.5 bg-blue-500/5 border border-blue-500/30 rounded-xl shadow-sm">
+              <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold block uppercase tracking-wider">✅ Tahsil Edilen Net Kasa/Banka</span>
+              <span className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1 block">{formatCurrency(metrics.totalCollectedRevenue, sym)}</span>
+              <span className="text-[11px] text-muted-foreground block mt-1">Kredi Kartı + Onaylanan Havale & Kapıda Ödeme</span>
+            </div>
+          </div>
+
+          {/* 3-Column Analytics Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Card 1: Ödeme Yöntemleri Dağılımı */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Ödeme Yöntemleri Dağılımı</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                    <span className="text-xs text-muted-foreground block">💳 Kredi Kartı</span>
-                    <span className="text-lg font-bold text-blue-500">{metrics.creditCardOrdersCount} Sipariş</span>
-                    <span className="text-xs text-muted-foreground block">{formatCurrency(metrics.creditCardTotalRevenue, sym)}</span>
+                  <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                    <span className="text-[10px] text-muted-foreground block">💳 Kredi Kartı</span>
+                    <span className="text-base font-bold text-blue-500">{metrics.creditCardOrdersCount} Sipariş</span>
+                    <span className="text-[10px] text-muted-foreground block">{formatCurrency(metrics.creditCardTotalRevenue, sym)}</span>
                   </div>
 
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                    <span className="text-xs text-muted-foreground block">📦 Kapıda Ödeme</span>
-                    <span className="text-lg font-bold text-amber-500">{metrics.codOrdersCount} Sipariş</span>
-                    <span className="text-xs text-muted-foreground block">{formatCurrency(metrics.codTotalRevenue, sym)}</span>
+                  <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                    <span className="text-[10px] text-muted-foreground block">📦 Kapıda Ödeme</span>
+                    <span className="text-base font-bold text-amber-500">{metrics.codOrdersCount} Sipariş</span>
+                    <span className="text-[10px] text-muted-foreground block">{formatCurrency(metrics.codTotalRevenue, sym)}</span>
                   </div>
 
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                    <span className="text-xs text-muted-foreground block">🏦 EFT / Havale</span>
-                    <span className="text-lg font-bold text-emerald-500">{metrics.transferOrdersCount} Sipariş</span>
-                    <span className="text-xs text-muted-foreground block">{formatCurrency(metrics.transferTotalRevenue, sym)}</span>
+                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                    <span className="text-[10px] text-muted-foreground block">🏦 EFT / Havale</span>
+                    <span className="text-base font-bold text-emerald-500">{metrics.transferOrdersCount} Sipariş</span>
+                    <span className="text-[10px] text-muted-foreground block">{formatCurrency(metrics.transferTotalRevenue, sym)}</span>
                   </div>
                 </div>
 
@@ -1394,6 +1428,7 @@ export default function Reports() {
               </CardContent>
             </Card>
 
+            {/* Card 2: Kapıda Ödeme Analizi */}
             <Card className="border-warning/30">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center justify-between">
@@ -1402,23 +1437,23 @@ export default function Reports() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                    <span className="text-xs text-emerald-500 font-medium block">Tahsil Edilen (Ödendi)</span>
-                    <span className="text-xl font-bold text-emerald-500">{metrics.codPaidCount} Sipariş</span>
-                    <span className="text-xs text-muted-foreground block mt-0.5">{formatCurrency(metrics.codPaidRevenue, sym)}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                    <span className="text-[11px] text-emerald-500 font-medium block">Tahsil Edilen</span>
+                    <span className="text-base font-bold text-emerald-500">{metrics.codPaidCount} Sipariş</span>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">{formatCurrency(metrics.codPaidRevenue, sym)}</span>
                   </div>
 
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                    <span className="text-xs text-amber-500 font-medium block">Bekleyen (Beklemede)</span>
-                    <span className="text-xl font-bold text-amber-500">{metrics.codPendingCount} Sipariş</span>
-                    <span className="text-xs text-muted-foreground block mt-0.5">{formatCurrency(metrics.codPendingRevenue, sym)}</span>
+                  <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <span className="text-[11px] text-amber-500 font-medium block">Bekleyen Valör</span>
+                    <span className="text-base font-bold text-amber-500">{metrics.codPendingCount} Sipariş</span>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">{formatCurrency(metrics.codPendingRevenue, sym)}</span>
                   </div>
 
-                  <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-                    <span className="text-xs text-destructive font-medium block">İptal / İade Edilen</span>
-                    <span className="text-xl font-bold text-destructive">{metrics.codCancelledCount} Sipariş</span>
-                    <span className="text-xs text-destructive/80 block mt-0.5">Kargo Kaybı: {formatCurrency(metrics.codCancellationPenaltyTotal, sym)}</span>
+                  <div className="p-2.5 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <span className="text-[11px] text-destructive font-medium block">İptal / İade</span>
+                    <span className="text-base font-bold text-destructive">{metrics.codCancelledCount} Sipariş</span>
+                    <span className="text-[10px] text-destructive/80 block mt-0.5">Kargo Kaybı: {formatCurrency(metrics.codCancellationPenaltyTotal, sym)}</span>
                   </div>
                 </div>
 
@@ -1439,18 +1474,134 @@ export default function Reports() {
                     <span className="text-muted-foreground">İptal / İade Edilen Sipariş:</span>
                     <span className="font-semibold text-destructive">{metrics.codCancelledCount} Sipariş ({formatCurrency(metrics.codCancellationPenaltyTotal, sym)} Kargo Kaybı)</span>
                   </div>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  💡 Müşteri kapıda ödeme siparişini teslim aldığında kargo firması hakedişi hesabınıza aktarır.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Card 3: EFT / Havale & Valör Analizi (YENİ) */}
+            <Card className="border-emerald-500/30 bg-emerald-500/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Landmark className="h-4 w-4 text-emerald-500" />
+                    🏛️ EFT / Havale Analizi
+                  </span>
+                  <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/40 bg-emerald-500/10">
+                    {metrics.transferPendingCount} Onay Bekliyor
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium block">Tahsil Edilen</span>
+                    <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{metrics.transferPaidCount} Sipariş</span>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">{formatCurrency(metrics.transferPaidRevenue, sym)}</span>
+                  </div>
+
+                  <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <span className="text-[11px] text-amber-500 font-medium block">Bekleyen Valör</span>
+                    <span className="text-base font-bold text-amber-500">{metrics.transferPendingCount} Sipariş</span>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">{formatCurrency(metrics.transferPendingRevenue, sym)}</span>
+                  </div>
+
+                  <div className="p-2.5 bg-muted/40 border border-border/50 rounded-lg">
+                    <span className="text-[11px] text-muted-foreground font-medium block">İptal / İade</span>
+                    <span className="text-base font-bold text-foreground">{metrics.transferCancelledCount} Sipariş</span>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">{formatCurrency(metrics.transferCancelledRevenue, sym)}</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-card rounded-lg border border-border/60 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Toplam Havale Siparişi:</span>
+                    <span className="font-semibold">{metrics.transferOrdersCount} Sipariş ({formatCurrency(metrics.transferTotalRevenue, sym)})</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Hesaba Geçen (Onaylanan):</span>
+                    <span className="font-semibold text-emerald-500">{metrics.transferPaidCount} Sipariş ({formatCurrency(metrics.transferPaidRevenue, sym)})</span>
+                  </div>
                   <div className="flex justify-between items-center pt-1 border-t border-border/40">
-                    <span className="text-muted-foreground">İptal / İade Oranı:</span>
-                    <span className="font-semibold text-destructive">%{metrics.codCancelRate.toFixed(1)} ({metrics.codCancelledCount} / {metrics.codOrdersCount || 0} Sipariş)</span>
+                    <span className="text-muted-foreground font-medium text-amber-500">Valör / Hesaba Geçiş Bekleyen:</span>
+                    <span className="font-bold text-amber-500">{metrics.transferPendingCount} Sipariş ({formatCurrency(metrics.transferPendingRevenue, sym)})</span>
                   </div>
                 </div>
 
                 <p className="text-[11px] text-muted-foreground">
-                  💡 Müşteri kapıda ödeme siparişini teslim almadığında stoklar stoka geri döner; gidiş kargosu (%100) + dönüş kargosu (%50) toplam 1.5 kat kargo maliyeti ceza maliyeti olarak işletmeye yansıtılır.
+                  💡 Müşteriden ödeme dekontu alındığında sipariş "Ödendi" durumuna çekilerek tahsil edilen kasaya eklenir.
                 </p>
               </CardContent>
             </Card>
           </div>
+
+          {/* TABLO: Valör / Tahsilat Bekleyen EFT ve Havale Siparişleri */}
+          <Card>
+            <CardHeader className="py-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-amber-500" />
+                  🏛️ Valör Bekleyen EFT / Havale Siparişleri ({metrics.transferPendingOrdersList.length})
+                </CardTitle>
+                <span className="text-xs text-muted-foreground">
+                  Müşteriden banka havalesi kontrol edilip onay bekleyen siparişler
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {metrics.transferPendingOrdersList.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sipariş No</TableHead>
+                        <TableHead>Tarih</TableHead>
+                        <TableHead>Müşteri / Cari</TableHead>
+                        <TableHead>Şehir</TableHead>
+                        <TableHead className="text-right">Tutar (KDV Dahil)</TableHead>
+                        <TableHead className="text-center">Ödeme Durumu</TableHead>
+                        <TableHead className="text-center">Sipariş Durumu</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {metrics.transferPendingOrdersList.map(order => (
+                        <TableRow key={order.id}>
+                          <TableCell className="font-mono font-medium text-xs">#{order.orderNumber}</TableCell>
+                          <TableCell className="text-xs">{toLocalDateString(order.orderDate)}</TableCell>
+                          <TableCell className="font-medium text-xs">{order.customerName}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{order.city || '-'}</TableCell>
+                          <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">
+                            {formatCurrency(calculateOrder(order).taxableAmount, sym)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30">
+                              ⏳ Havale Bekliyor
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {order.orderStatus === 'hazirlaniyor' ? '📦 Hazırlanıyor' : order.orderStatus === 'kargoda' ? '🚚 Kargoda' : order.orderStatus === 'tamamlandi' ? '✅ Tamamlandı' : order.orderStatus}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="p-8 text-center bg-muted/20 rounded-xl border border-dashed border-border/60 space-y-2">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
+                  <p className="font-medium text-sm text-foreground">Onay Bekleyen Havale Ödemesi Bulunmuyor</p>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    Seçilen tarih aralığında hesabına geçmesi veya onaylanması bekleyen EFT / Havale siparişi yoktur. Tüm havaleler tahsil edilmiştir.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* TAB 5: BÖLGESEL DAĞILIM */}
