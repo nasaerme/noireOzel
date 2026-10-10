@@ -341,3 +341,21 @@ VALUES
   ('part_1', 'Emre Asan', 50.00, 'Facebook, Kargo ve Vergi Ödemeleri'),
   ('part_2', 'Mustafa Atar', 50.00, 'Diğer Şahsi Kart İşlemleri')
 ON CONFLICT (id) DO NOTHING;
+
+-- Varsayılan Cari & Kart Hareketleri (Ağustos - Ekim)
+INSERT INTO partner_transactions (id, date, partner_id, partner_name, card_name, type, category, description, amount, invoice_status, created_at)
+VALUES
+  ('pt_1', '2026-08-15', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Facebook Ads', 'Ağustos Facebook Reklam Harcaması', 422796.29, 'faturali', '2026-08-15T10:00:00Z'),
+  ('pt_2', '2026-09-15', 'part_1', 'Emre Asan', 'Şirket Akbank Hesabı ➔ Karta Transfer', 'geri_odeme', 'Nakit Reimbursement', '15 Eylül Şirketten Şahıs Kredisine Ödeme', 100000.00, 'faturali', '2026-09-15T14:30:00Z'),
+  ('pt_3', '2026-09-20', 'part_1', 'Emre Asan', 'Şirket Akbank Hesabı ➔ Karta Transfer', 'geri_odeme', 'Nakit Reimbursement', '20 Eylül Şirketten Şahıs Kredisine Ödeme', 62000.00, 'faturali', '2026-09-20T11:15:00Z'),
+  ('pt_4', '2026-09-23', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'faiz', 'Kart Ekstre Faizi', '23 Eylül Ekstre Kalan Borç Akdi/Gecikme Faizi', 12500.00, 'faturasiz', '2026-09-23T09:00:00Z'),
+  ('pt_5', '2026-09-23', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Facebook Ads', 'Eylül Facebook Reklam Harcaması', 426577.34, 'faturali', '2026-09-23T12:00:00Z'),
+  ('pt_6', '2026-09-24', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Kargo & Lojistik', 'Aras Kargo Eylül Faturası', 15250.00, 'faturali', '2026-09-24T10:00:00Z'),
+  ('pt_7', '2026-09-25', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Ürün Tedarik', 'Bernato Ürün Alımı', 44985.00, 'faturali', '2026-09-25T14:00:00Z'),
+  ('pt_8', '2026-09-25', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Yazılım & Altyapı', 'E-imza Yenileme Bedeli', 2199.00, 'faturali', '2026-09-25T15:30:00Z'),
+  ('pt_9', '2026-09-26', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Ambalaj & Malzeme', 'Gipaş Koli ve Paket Malzemesi', 3876.00, 'faturasiz', '2026-09-26T11:00:00Z'),
+  ('pt_10', '2026-09-26', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Yazılım & Altyapı', 'Uyumsoft E-fatura Entegrasyon', 15000.00, 'faturali', '2026-09-26T16:00:00Z'),
+  ('pt_11', '2026-09-27', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Kargo & Lojistik', 'PTT Kargo Gönderim Bedeli', 1115.00, 'faturasiz', '2026-09-27T10:00:00Z'),
+  ('pt_12', '2026-10-02', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Vergi & Resmi Harç', 'KDV Ödemesi (Şahıs Kartından Çekilen)', 33688.13, 'faturali', '2026-10-02T09:30:00Z'),
+  ('pt_13', '2026-10-05', 'part_1', 'Emre Asan', 'Garanti Miles&Smiles (Şahıs)', 'harcama', 'Kargo & Lojistik', 'Aras Kargo Ekim Faturası', 34706.20, 'faturali', '2026-10-05T14:00:00Z')
+ON CONFLICT (id) DO NOTHING;

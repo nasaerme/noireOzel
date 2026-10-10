@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { PartnerAccount, PartnerTransaction } from "@/types";
 import { formatCurrency, formatDate, generateId } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   TrendingUp, TrendingDown, Receipt, ShieldAlert, Filter
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 // Real-world sample data based on user's exact case
 const INITIAL_PARTNERS: PartnerAccount[] = [
@@ -194,6 +195,7 @@ const DEMO_TRANSACTIONS: PartnerTransaction[] = [
 ];
 
 export function PartnerLedgerTab() {
+  const [loading, setLoading] = useState(false);
   const [partners, setPartners] = useState<PartnerAccount[]>(() => {
     const saved = localStorage.getItem('partner_accounts');
     if (saved) {
@@ -227,6 +229,107 @@ export function PartnerLedgerTab() {
     }
     return DEMO_TRANSACTIONS;
   });
+
+  const loadFromSupabase = useCallback(async (showToast = false) => {
+    try {
+      setLoading(true);
+
+      // 1. Fetch Partners
+      const { data: pData, error: pErr } = await supabase
+        .from('partner_accounts')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (!pErr && pData && pData.length > 0) {
+        const loadedPartners: PartnerAccount[] = pData.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          sharePercentage: p.share_percentage ? Number(p.share_percentage) : 50,
+          phone: p.phone || '',
+          notes: p.notes || '',
+          createdAt: p.created_at
+        }));
+        setPartners(loadedPartners);
+        localStorage.setItem('partner_accounts', JSON.stringify(loadedPartners));
+      } else if (!pErr) {
+        const seedPartners = INITIAL_PARTNERS.map(p => ({
+          id: p.id,
+          name: p.name,
+          share_percentage: p.sharePercentage || 50,
+          notes: p.notes || '',
+          created_at: p.createdAt || new Date().toISOString()
+        }));
+        await supabase.from('partner_accounts').upsert(seedPartners);
+      }
+
+      // 2. Fetch Transactions
+      const { data: tData, error: tErr } = await supabase
+        .from('partner_transactions')
+        .select('*')
+        .order('date', { ascending: true });
+
+      if (!tErr && tData && tData.length > 0) {
+        const loadedTxs: PartnerTransaction[] = tData.map((t: any) => ({
+          id: t.id,
+          date: t.date,
+          partnerId: t.partner_id,
+          partnerName: t.partner_name,
+          cardName: t.card_name || 'Şahıs Kredi Kartı',
+          type: t.type,
+          category: t.category,
+          description: t.description,
+          amount: Number(t.amount),
+          invoiceStatus: t.invoice_status || 'faturali',
+          invoiceNo: t.invoice_no || '',
+          notes: t.notes || '',
+          createdAt: t.created_at
+        }));
+        setTransactions(loadedTxs);
+        localStorage.setItem('partner_transactions', JSON.stringify(loadedTxs));
+        if (showToast) toast.success(`${loadedTxs.length} adet cari işlem Supabase'den çekildi!`);
+      } else if (!tErr && (!tData || tData.length === 0)) {
+        // Veritabanında henüz işlem yoksa, mevcut verileri aktar
+        const localSaved = localStorage.getItem('partner_transactions');
+        let toUploadTxs = DEMO_TRANSACTIONS;
+        if (localSaved) {
+          try {
+            const parsed = JSON.parse(localSaved);
+            if (Array.isArray(parsed) && parsed.length > 0) toUploadTxs = parsed;
+          } catch (e) {}
+        }
+        const dbRows = toUploadTxs.map(t => ({
+          id: t.id,
+          date: t.date,
+          partner_id: t.partnerId,
+          partner_name: t.partnerName,
+          card_name: t.cardName || 'Şahıs Kredi Kartı',
+          type: t.type,
+          category: t.category,
+          description: t.description,
+          amount: t.amount,
+          invoice_status: t.invoiceStatus || 'faturali',
+          invoice_no: t.invoiceNo || null,
+          notes: t.notes || null,
+          created_at: t.createdAt || new Date().toISOString()
+        }));
+        await supabase.from('partner_transactions').upsert(dbRows);
+        setTransactions(toUploadTxs);
+        if (showToast) toast.success("Veriler veritabanı ile eşitlendi!");
+      } else if (tErr) {
+        console.warn("Supabase fetch partner error:", tErr);
+        if (showToast) toast.error("Veritabanı bağlantı hatası: " + tErr.message);
+      }
+    } catch (e) {
+      console.error(e);
+      if (showToast) toast.error("Veri yüklenirken hata oluştu");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFromSupabase(false);
+  }, [loadFromSupabase]);
 
   useEffect(() => {
     localStorage.setItem('partner_accounts', JSON.stringify(partners));
@@ -382,7 +485,7 @@ export function PartnerLedgerTab() {
     setTxDialogOpen(true);
   };
 
-  const handleSaveTransaction = () => {
+  const handleSaveTransaction = async () => {
     const amt = parseFloat(txForm.amount);
     if (isNaN(amt) || amt <= 0) {
       toast.error('Geçerli bir tutar giriniz');
@@ -411,20 +514,70 @@ export function PartnerLedgerTab() {
     setTransactions(prev => [...prev, newTx]);
     setTxDialogOpen(false);
     toast.success('Cari hareket başarıyla kaydedildi!');
-  };
 
-  const handleDeleteTransaction = (id: string) => {
-    if (confirm('Bu cari hareketi silmek istediğinize emin misiniz?')) {
-      setTransactions(prev => prev.filter(t => t.id !== id));
-      toast.success('Hareket silindi.');
+    const { error } = await supabase.from('partner_transactions').insert({
+      id: newTx.id,
+      date: newTx.date,
+      partner_id: newTx.partnerId,
+      partner_name: newTx.partnerName,
+      card_name: newTx.cardName,
+      type: newTx.type,
+      category: newTx.category,
+      description: newTx.description,
+      amount: newTx.amount,
+      invoice_status: newTx.invoiceStatus,
+      created_at: newTx.createdAt
+    });
+
+    if (error) {
+      console.error("Supabase insert error:", error);
+      toast.error("Veritabanına kayıt edilemedi: " + error.message);
     }
   };
 
-  const handleResetToDemoData = () => {
+  const handleDeleteTransaction = async (id: string) => {
+    if (confirm('Bu cari hareketi silmek istediğinize emin misiniz?')) {
+      setTransactions(prev => prev.filter(t => t.id !== id));
+      toast.success('Hareket silindi.');
+
+      const { error } = await supabase.from('partner_transactions').delete().eq('id', id);
+      if (error) {
+        console.error("Supabase delete error:", error);
+      }
+    }
+  };
+
+  const handleResetToDemoData = async () => {
     if (confirm('Tüm mevcut cari veriler silinip verdiğiniz gerçek Ağustos-Eylül-Ekim verileri yeniden yüklensin mi?')) {
       setPartners(INITIAL_PARTNERS);
       setTransactions(DEMO_TRANSACTIONS);
-      toast.success('Gerçek senaryo verileri başarıyla yüklendi!');
+      
+      try {
+        setLoading(true);
+        await supabase.from('partner_transactions').delete().neq('id', 'placeholder');
+
+        const dbRows = DEMO_TRANSACTIONS.map(t => ({
+          id: t.id,
+          date: t.date,
+          partner_id: t.partnerId,
+          partner_name: t.partnerName,
+          card_name: t.cardName || 'Şahıs Kredi Kartı',
+          type: t.type,
+          category: t.category,
+          description: t.description,
+          amount: t.amount,
+          invoice_status: t.invoiceStatus || 'faturali',
+          invoice_no: t.invoiceNo || null,
+          notes: t.notes || null,
+          created_at: t.createdAt || new Date().toISOString()
+        }));
+        await supabase.from('partner_transactions').upsert(dbRows);
+        toast.success('Gerçek senaryo verileri veritabanına ve ekrana yüklendi!');
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -452,6 +605,18 @@ export function PartnerLedgerTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button 
+              onClick={() => loadFromSupabase(true)}
+              variant="outline"
+              size="sm"
+              disabled={loading}
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20 gap-1.5 text-xs backdrop-blur-md"
+              title="Buluttaki en güncel kayıtları çek ve senkronize et"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 text-sky-400 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Eşitleniyor...' : 'Bulutla Eşitle'}</span>
+            </Button>
+
             <Button 
               onClick={handleResetToDemoData}
               variant="outline"
