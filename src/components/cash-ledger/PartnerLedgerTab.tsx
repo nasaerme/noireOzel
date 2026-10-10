@@ -547,40 +547,6 @@ export function PartnerLedgerTab() {
     }
   };
 
-  const handleResetToDemoData = async () => {
-    if (confirm('Tüm mevcut cari veriler silinip verdiğiniz gerçek Ağustos-Eylül-Ekim verileri yeniden yüklensin mi?')) {
-      setPartners(INITIAL_PARTNERS);
-      setTransactions(DEMO_TRANSACTIONS);
-      
-      try {
-        setLoading(true);
-        await supabase.from('partner_transactions').delete().neq('id', 'placeholder');
-
-        const dbRows = DEMO_TRANSACTIONS.map(t => ({
-          id: t.id,
-          date: t.date,
-          partner_id: t.partnerId,
-          partner_name: t.partnerName,
-          card_name: t.cardName || 'Şahıs Kredi Kartı',
-          type: t.type,
-          category: t.category,
-          description: t.description,
-          amount: t.amount,
-          invoice_status: t.invoiceStatus || 'faturali',
-          invoice_no: t.invoiceNo || null,
-          notes: t.notes || null,
-          created_at: t.createdAt || new Date().toISOString()
-        }));
-        await supabase.from('partner_transactions').upsert(dbRows);
-        toast.success('Gerçek senaryo verileri veritabanına ve ekrana yüklendi!');
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -615,16 +581,6 @@ export function PartnerLedgerTab() {
             >
               <RefreshCw className={`h-3.5 w-3.5 text-sky-400 ${loading ? 'animate-spin' : ''}`} />
               <span>{loading ? 'Eşitleniyor...' : 'Bulutla Eşitle'}</span>
-            </Button>
-
-            <Button 
-              onClick={handleResetToDemoData}
-              variant="outline"
-              size="sm"
-              className="bg-white/10 hover:bg-white/20 text-white border-white/20 gap-1.5 text-xs backdrop-blur-md"
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Gerçek Verileri Yükle</span>
             </Button>
 
             <Button
