@@ -592,6 +592,14 @@ export function PartnerLedgerTab() {
             </Button>
 
             <Button
+              onClick={() => handleOpenAddDialog('faiz')}
+              className="bg-amber-600 hover:bg-amber-500 text-white gap-1.5 text-xs font-medium shadow-md shadow-amber-900/50"
+            >
+              <ShieldAlert className="h-4 w-4" />
+              <span>+ Kart Faizi Ekle</span>
+            </Button>
+
+            <Button
               onClick={() => handleOpenAddDialog('geri_odeme')}
               className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5 text-xs font-medium shadow-md shadow-indigo-900/50"
             >
@@ -985,6 +993,65 @@ export function PartnerLedgerTab() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* İşlem Tipi Değiştirici (Segmented Switcher) */}
+            <div className="grid grid-cols-3 gap-1 p-1 bg-muted/70 rounded-xl border border-border/50">
+              <button
+                type="button"
+                onClick={() => {
+                  setTxType('harcama');
+                  setTxForm(prev => ({ 
+                    ...prev, 
+                    category: prev.category === 'Kart Ekstre Faizi' || prev.category === 'Nakit Reimbursement' ? 'Facebook Ads' : prev.category, 
+                    cardName: prev.cardName.includes('Banka Hesabı') ? 'Garanti Miles&Smiles (Şahıs Kartı)' : prev.cardName,
+                    invoiceStatus: 'faturali' 
+                  }));
+                }}
+                className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  txType === 'harcama' ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+              >
+                <Receipt className="h-3.5 w-3.5" />
+                <span>Kart Harcaması</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTxType('faiz');
+                  setTxForm(prev => ({ 
+                    ...prev, 
+                    category: 'Kart Ekstre Faizi', 
+                    description: prev.description || 'Ekstre Gecikme / Akdi Faizi',
+                    invoiceStatus: 'faturasiz' 
+                  }));
+                }}
+                className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  txType === 'faiz' ? 'bg-amber-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+              >
+                <ShieldAlert className="h-3.5 w-3.5" />
+                <span>Kart Faizi</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTxType('geri_odeme');
+                  setTxForm(prev => ({ 
+                    ...prev, 
+                    category: 'Nakit Reimbursement', 
+                    cardName: 'Şirket Banka Hesabı (Ödeme Yapıldı)',
+                    description: prev.description || 'Şirketten Şahıs Kredisine Ödeme',
+                    invoiceStatus: 'faturali' 
+                  }));
+                }}
+                className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  txType === 'geri_odeme' ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+              >
+                <ArrowDownLeft className="h-3.5 w-3.5" />
+                <span>Geri Ödeme</span>
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Tarih</Label>
