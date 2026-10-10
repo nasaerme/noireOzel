@@ -286,6 +286,29 @@ export interface OfficialInvoice {
   invoiceFileName?: string;
   notes?: string;
   createdAt: string;
+export interface PartnerAccount {
+  id: string;
+  name: string; // Örn: Emre Asan, Mustafa Atar
+  sharePercentage?: number; // Örn: 50 (%)
+  phone?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface PartnerTransaction {
+  id: string;
+  date: string; // YYYY-MM-DD
+  partnerId: string; // Hangi Ortak
+  partnerName: string; // Örn: Ahmet
+  cardName?: string; // Örn: Garanti Miles&Smiles (Şahıs)
+  type: 'harcama' | 'faiz' | 'geri_odeme'; // 'harcama', 'faiz', 'geri_odeme'
+  category: string; // Örn: Facebook Ads, Kargo, Yazılım, Vergi/KDV, Faiz, Nakit Reimbursement
+  description: string;
+  amount: number; // TL
+  invoiceStatus?: 'faturali' | 'faturasiz'; // Faturalı işlem mi faturasız mı?
+  invoiceNo?: string;
+  notes?: string;
+  createdAt: string;
 }
 
 

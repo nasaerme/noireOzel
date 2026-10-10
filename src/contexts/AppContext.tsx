@@ -400,11 +400,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setOfficialInvoices(oiD.map((oi: any) => {
             const rawType = (oi.type || '').toLowerCase();
             const isReceived = rawType.includes('bana') || rawType.includes('gider') || rawType.includes('received') || rawType.includes('alis') || rawType.includes('gelen');
-            
+            const matchedComp = (settings.companies || []).find((c: any) => c.id === oi.company_id);
+            const compId = oi.company_id || defaultComp.id;
+            const compName = oi.company_name || matchedComp?.name || defaultComp.name;
+
             return {
               id: oi.id,
-              companyId: oi.company_id || settings.activeCompanyId || defaultComp.id,
-              companyName: oi.company_name || defaultComp.name,
+              companyId: compId,
+              companyName: compName,
               type: isReceived ? 'bana_kesilen' : 'kestigim',
               invoiceNumber: oi.invoice_number || 'FATURA',
               date: oi.date || (oi.created_at ? oi.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),

@@ -124,6 +124,13 @@ export function calculateOrder(order: Order): OrderCalculation {
     }
 
     const cancellationPenalty = totalShippingPenalty;
+    const pureShippingPenalty = isReturned
+      ? order.shippingCost * 2
+      : ((order.paymentMethod === 'kredi_karti' || order.paymentMethod === 'online_kredi_karti' || order.paymentMethod === 'havale' || order.paymentMethod === 'havale_eft')
+        ? 0
+        : order.shippingCost * 1.5);
+    const actualCarrierCodFee = cancellationPenalty - pureShippingPenalty;
+
     const totalCost = cancellationPenalty;
 
     return {
@@ -134,12 +141,12 @@ export function calculateOrder(order: Order): OrderCalculation {
       totalTax: 0,
       totalProductCost: 0,
       giftCost: 0,
-      shippingCost: totalShippingPenalty,
+      shippingCost: pureShippingPenalty,
       packagingCost: 0,
       paymentCommissionCost: 0,
       shopifyCommissionCost: 0,
       totalCommissionCost: 0,
-      carrierCodFeeCost: 0,
+      carrierCodFeeCost: actualCarrierCodFee,
       extraExpense: 0,
       totalCost,
       grossProfit: -cancellationPenalty,

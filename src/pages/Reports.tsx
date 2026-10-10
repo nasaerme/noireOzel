@@ -126,6 +126,7 @@ export default function Reports() {
 
       if (calc.isCancelled) {
         shippingCost += calc.shippingCost;
+        carrierCodFeeCost += calc.carrierCodFeeCost;
         extraExpense += calc.extraExpense;
         collectedOrderCosts += calc.totalCost;
       } else {
@@ -570,7 +571,7 @@ export default function Reports() {
 
     return {
       totalOrders, unitsSold, subtotal, collectedSubtotal, pendingSubtotal, totalTax, totalProductCost,
-      shippingCost, packagingCost, extraExpense, paymentCommission, shopifyCommission, totalCommission,
+      shippingCost, carrierCodFeeCost, packagingCost, extraExpense, paymentCommission, shopifyCommission, totalCommission,
       giftCost, totalDiscounts, totalOrderCosts, totalExpensesAll,
       totalBusinessExpenses, grossProfit, netProfit, collectedNetProfit, pendingNetProfit, profitMargin, collectedProfitMargin,
       topProducts, topVariants, allProductsList, allVariantsList, expBreakdown, timeData, mapColors, mapTooltips, topCities,
@@ -761,10 +762,11 @@ export default function Reports() {
           <div className="space-y-4">
             <div className="space-y-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Sipariş Maliyetleri</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
                 <KPI label="Ürün Maliyeti" value={formatCurrency(metrics.totalProductCost, sym)} small />
                 <KPI label="KDV" value={formatCurrency(metrics.totalTax, sym)} small />
-                <KPI label="Kargo" value={formatCurrency(metrics.shippingCost, sym)} small />
+                <KPI label="Kargo Bedeli" value={formatCurrency(metrics.shippingCost, sym)} small />
+                <KPI label="Tahsilatlı Kargo Kesintisi" value={formatCurrency(metrics.carrierCodFeeCost, sym)} small />
                 <KPI label="Ambalaj" value={formatCurrency(metrics.packagingCost, sym)} small />
                 <KPI label="Ek Hizmet" value={formatCurrency(metrics.extraExpense, sym)} small />
                 <KPI label="Hediye Maliyeti" value={formatCurrency(metrics.giftCost, sym)} small />
@@ -1469,6 +1471,10 @@ export default function Reports() {
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Bekleyen Kapıda Ödeme (Beklemede):</span>
                     <span className="font-semibold text-amber-500">{metrics.codPendingCount} Sipariş ({formatCurrency(metrics.codPendingRevenue, sym)})</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Kargo K.Ö. Hizmet Bedeli Kesintisi:</span>
+                    <span className="font-semibold text-destructive/90">{formatCurrency(metrics.carrierCodFeeCost, sym)}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">İptal / İade Edilen Sipariş:</span>

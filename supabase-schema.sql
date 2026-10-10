@@ -258,6 +258,63 @@ CREATE TABLE IF NOT EXISTS official_invoices (
 ALTER TABLE official_invoices ADD COLUMN IF NOT EXISTS company_id TEXT;
 ALTER TABLE official_invoices ADD COLUMN IF NOT EXISTS company_name TEXT;
 
+-- 11. COMPETITOR TRACKING
+CREATE TABLE IF NOT EXISTS competitor_ads (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  product_name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  competitors TEXT[] DEFAULT '{}',
+  ad_count INTEGER DEFAULT 1,
+  ad_type TEXT,
+  in_stock BOOLEAN DEFAULT false,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS competitor_profiles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  competitor_name TEXT NOT NULL,
+  creative_count INTEGER DEFAULT 0,
+  price_range TEXT,
+  strategy TEXT,
+  products_note TEXT,
+  ad_library_url TEXT,
+  website_url TEXT,
+  instagram_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 12. ORTAK CARİLERİ & ŞAHIS KARTLARI
+CREATE TABLE IF NOT EXISTS partner_accounts (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name TEXT NOT NULL,
+  share_percentage DECIMAL(5,2) DEFAULT 50.00,
+  phone TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS partner_transactions (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  partner_id TEXT NOT NULL REFERENCES partner_accounts(id) ON DELETE CASCADE,
+  partner_name TEXT NOT NULL,
+  card_name TEXT,
+  type TEXT NOT NULL, -- 'harcama', 'faiz', 'geri_odeme'
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  invoice_status TEXT DEFAULT 'faturali', -- 'faturali', 'faturasiz'
+  invoice_no TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Kolon güncellemeleri
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS returned_quantity INTEGER DEFAULT 0;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS restock_returned BOOLEAN DEFAULT true;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS custom_refund_amount DECIMAL(12,2);
+
 -- Disable Row Level Security (RLS) policies completely for direct client access
 ALTER TABLE products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE product_variants DISABLE ROW LEVEL SECURITY;
@@ -273,3 +330,14 @@ ALTER TABLE supplier_invoices DISABLE ROW LEVEL SECURITY;
 ALTER TABLE expected_payouts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE upcoming_payables DISABLE ROW LEVEL SECURITY;
 ALTER TABLE official_invoices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE competitor_ads DISABLE ROW LEVEL SECURITY;
+ALTER TABLE competitor_profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE partner_accounts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE partner_transactions DISABLE ROW LEVEL SECURITY;
+
+-- Varsayılan Ortak Tanımları
+INSERT INTO partner_accounts (id, name, share_percentage, notes)
+VALUES 
+  ('part_1', 'Emre Asan', 50.00, 'Facebook, Kargo ve Vergi Ödemeleri'),
+  ('part_2', 'Mustafa Atar', 50.00, 'Diğer Şahsi Kart İşlemleri')
+ON CONFLICT (id) DO NOTHING;

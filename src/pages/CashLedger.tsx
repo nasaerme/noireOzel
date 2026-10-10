@@ -16,9 +16,10 @@ import {
   Calendar, FileText, X, Building2, CreditCard as CreditCardIcon, 
   Clock, CheckCircle2, AlertCircle, Upload, Eye, Download, ShieldAlert,
   ArrowRightLeft, FileCheck, Layers, Check, ShoppingBag, ListPlus, Tag,
-  TrendingUp, TrendingDown, Receipt
+  TrendingUp, TrendingDown, Receipt, Users
 } from "lucide-react";
 import { toast } from "sonner";
+import { PartnerLedgerTab } from "@/components/cash-ledger/PartnerLedgerTab";
 
 export default function CashLedger() {
   const { 
@@ -669,9 +670,12 @@ export default function CashLedger() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-5 w-full h-auto p-1 bg-muted/60">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-6 w-full h-auto p-1 bg-muted/60">
           <TabsTrigger value="overview" className="text-xs py-2.5 gap-1.5">
             <Layers className="h-3.5 w-3.5" /> Genel Bakış
+          </TabsTrigger>
+          <TabsTrigger value="partner_ledger" className="text-xs py-2.5 gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+            <Users className="h-3.5 w-3.5 text-emerald-500" /> Ortak Carileri & Kartlar
           </TabsTrigger>
           <TabsTrigger value="valors" className="text-xs py-2.5 gap-1.5">
             <Clock className="h-3.5 w-3.5" /> Valörlü Alacaklar ({filteredExpectedPayouts.length})
@@ -1446,6 +1450,11 @@ export default function CashLedger() {
               })}
             </div>
           </div>
+        </TabsContent>
+
+        {/* ==================== TAB: ORTAK CARİLERİ & ŞAHIS KREDİ KARTLARI ==================== */}
+        <TabsContent value="partner_ledger" className="mt-4">
+          <PartnerLedgerTab />
         </TabsContent>
       </Tabs>
 

@@ -41,6 +41,52 @@ interface BatchInvoiceItem {
   notes: string;
 }
 
+export function detectCompanyForInvoice(
+  parsed: { sellerTaxId?: string; partyTaxId?: string; sellerName?: string; partyName?: string; rawText?: string },
+  companies: any[],
+  fallbackCompanyId: string
+): { companyId: string; companyName: string } {
+  if (!companies || companies.length === 0) {
+    return { companyId: 'comp_sahis', companyName: 'Şahıs Firması' };
+  }
+
+  const defaultComp = companies.find(c => c.isDefault) || companies[0];
+
+  const pdfText = ((parsed.rawText || '') + ' ' + (parsed.sellerName || '') + ' ' + (parsed.partyName || '')).toUpperCase();
+  const pdfTaxIds = [parsed.sellerTaxId, parsed.partyTaxId].map(t => (t || '').trim()).filter(Boolean);
+
+  // 1. Check exact VKN / TCKN match
+  for (const comp of companies) {
+    if (comp.taxId && comp.taxId.trim()) {
+      const compTax = comp.taxId.trim();
+      if (pdfTaxIds.includes(compTax) || pdfText.includes(compTax)) {
+        return { companyId: comp.id, companyName: comp.name };
+      }
+    }
+  }
+
+  // 2. Check company name match
+  for (const comp of companies) {
+    const cleanCompName = comp.name.toUpperCase().replace(/\([^)]*\)/g, '').trim();
+    if (cleanCompName.length >= 4 && pdfText.includes(cleanCompName)) {
+      return { companyId: comp.id, companyName: comp.name };
+    }
+  }
+
+  // 3. Keyword Match (Limited vs Şahıs)
+  const isLimited = pdfText.includes('LİMİTED') || pdfText.includes('LIMITED') || pdfText.includes('LTD. ŞTİ') || pdfText.includes('LTD.ŞTİ') || pdfText.includes('LTD STI');
+  if (isLimited) {
+    const ltdComp = companies.find(c => c.type === 'limited');
+    if (ltdComp) return { companyId: ltdComp.id, companyName: ltdComp.name };
+  } else {
+    const sahisComp = companies.find(c => c.type === 'sahis');
+    if (sahisComp) return { companyId: sahisComp.id, companyName: sahisComp.name };
+  }
+
+  const fallbackComp = companies.find(c => c.id === fallbackCompanyId) || defaultComp;
+  return { companyId: fallbackComp.id, companyName: fallbackComp.name };
+}
+
 export default function Invoices() {
   const { officialInvoices, addOfficialInvoice, addOfficialInvoicesBatch, fetchInvoiceFile, updateOfficialInvoice, deleteOfficialInvoice, settings } = useApp();
   const sym = settings.currencySymbol;
@@ -194,13 +240,14 @@ export default function Invoices() {
         });
 
         const parsed = await parseInvoicePdf(file);
+        const autoComp = detectCompanyForInvoice(parsed, companies, targetCompId);
         const finalPartyName = defaultType === "bana_kesilen" ? (parsed.sellerName || parsed.partyName) : parsed.partyName;
         const finalPartyTaxId = defaultType === "bana_kesilen" ? (parsed.sellerTaxId || parsed.partyTaxId) : parsed.partyTaxId;
 
         parsedList.push({
           id: `batch_${Date.now()}_${i}`,
-          companyId: targetCompId,
-          companyName: targetComp.name,
+          companyId: autoComp.companyId,
+          companyName: autoComp.companyName,
           type: defaultType,
           invoiceNumber: parsed.invoiceNumber,
           date: parsed.date,
@@ -244,6 +291,7 @@ export default function Invoices() {
       reader.onload = async (event) => {
         const base64 = event.target?.result as string;
         const parsed = await parseInvoicePdf(file);
+        const autoComp = detectCompanyForInvoice(parsed, companies, selectedCompanyId !== "all" ? selectedCompanyId : activeDefaultCompany.id);
         const typeToUse = targetType || (activeTab === "bana_kesilen" ? "bana_kesilen" : "kestigim");
         const finalPartyName = typeToUse === "bana_kesilen" ? (parsed.sellerName || parsed.partyName) : parsed.partyName;
         const finalPartyTaxId = typeToUse === "bana_kesilen" ? (parsed.sellerTaxId || parsed.partyTaxId) : parsed.partyTaxId;
@@ -251,6 +299,7 @@ export default function Invoices() {
         setEditingInvoice(null);
         setIsAutoParsed(true);
         setFormData({
+          companyId: autoComp.companyId,
           type: typeToUse,
           invoiceNumber: parsed.invoiceNumber,
           date: parsed.date,
@@ -270,7 +319,7 @@ export default function Invoices() {
 
         setIsParsingPdf(false);
         toast.dismiss(toastId);
-        toast.success("✨ E-Fatura bilgileri otomatik algılandı!");
+        toast.success(`✨ E-Fatura bilgileri ve firma profili (${autoComp.companyName}) otomatik algılandı!`);
         setIsAddDialogOpen(true);
       };
       reader.readAsDataURL(file);
