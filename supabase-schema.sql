@@ -335,6 +335,13 @@ ALTER TABLE competitor_profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE partner_accounts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE partner_transactions DISABLE ROW LEVEL SECURITY;
 
+-- RLS politikaları (Supabase RLS'i açık tutsa bile tam izin verir)
+DROP POLICY IF EXISTS "allow_all_partner_transactions" ON partner_transactions;
+CREATE POLICY "allow_all_partner_transactions" ON partner_transactions FOR ALL TO public USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "allow_all_partner_accounts" ON partner_accounts;
+CREATE POLICY "allow_all_partner_accounts" ON partner_accounts FOR ALL TO public USING (true) WITH CHECK (true);
+
 -- Varsayılan Ortak Tanımları
 INSERT INTO partner_accounts (id, name, share_percentage, notes)
 VALUES 
